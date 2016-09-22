@@ -7,14 +7,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define MOV (32)
+#define WAIT (64)
+#define LOOP_START (128)
+#define END_LOOP (160)
+#define RECIPE_END (0)
+
 uint8_t buffer[BufferSize];
 char str[] = "POST routine starting...\r\n";
 char post_ok[] = "POST routine successful\r\n";
 char post_fail[] = "POST routine failed. Would you like to continue(y,n)?\r\n";
 char good_bye[] = "Goodbye\r\n";
+char out_range[] = "Error. you have entered a parameter out of the bounds of the Mnemonic command";
+unsigned char cmd[] = "        ";
 
 // function prototypes
 static int post_test(void);
+int init(void);
+uint8_t cmd_read(unsigned char cmd);
+
 
 int main(void){
 	char rxByte = 'y';
@@ -24,7 +35,38 @@ int main(void){
 	LED_Init();
 	UART2_Init();
 	
+	init();
 	
+	
+	// write that we are starting post test
+	USART_Write(USART2, (uint8_t *)str, strlen(str));
+	// interface with user for post test
+	while(!pass && rxByte == 'y')
+	{
+			if(post_test()) {
+				pass = 1;
+				USART_Write(USART2, (uint8_t *)post_ok, strlen(post_ok));
+			} else {
+				USART_Write(USART2, (uint8_t *)post_fail, strlen(post_fail));
+				rxByte = USART_Read(USART2);
+				if (rxByte == 'Y' || rxByte == 'y'){
+					rxByte = 'y';
+				}
+			}
+	}
+	rxByte = 'n';
+	while(rxByte == 'y' && pass)
+	{		
+		//USART_Write(USART2, (uint8_t *)another_session, strlen(another_session));
+		rxByte = USART_Read(USART2);
+		if (rxByte == 'Y' || rxByte == 'y'){
+			rxByte = 'y';
+		}
+	}
+	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
+}
+int init(void)
+{
 	/*
 		GPIO AND ALTERNATE FUNCTION SETUP
 	
@@ -47,8 +89,6 @@ int main(void){
 	GPIOA->AFR[0] &= ~(0xF0);
 	GPIOA->AFR[0] |= (0x1);
 	GPIOA->AFR[0] |= (0x10);
-	
-	
 	
 	/*
 		TIMER CAPTURE SETUP
@@ -97,33 +137,56 @@ int main(void){
 	
 	// make sure the timer is stopped
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
-	
-	// write that we are starting post test
-	USART_Write(USART2, (uint8_t *)str, strlen(str));
-	// interface with user for post test
-	while(!pass && rxByte == 'y')
+	return 0;
+}
+uint8_t cmd_read(unsigned char cmd)
+{
+	int wait_flag;
+	uint8_t delay;
+	static uint32_t cnt;
+	static uint32_t cnt1;
+	switch(0xE0 & cmd )
 	{
-			if(post_test()) {
-				pass = 1;
-				USART_Write(USART2, (uint8_t *)post_ok, strlen(post_ok));
-			} else {
-				USART_Write(USART2, (uint8_t *)post_fail, strlen(post_fail));
-				rxByte = USART_Read(USART2);
-				if (rxByte == 'Y' || rxByte == 'y'){
-					rxByte = 'y';
+		case(MOV):
+			switch(0x1F & cmd)
+			{
+				case(0) :
+					TIM2->CCR1 = 0;				//Sets the duty cycle to 0%, and Position to 0
+				case(1) :
+					TIM2->CCR1 = 4;				//Sets the duty cycle to 2%, and Position to 1
+				case(2) :
+					TIM2->CCR1 = 8;				//Sets the duty cycle to 4%, and Position to 2
+				case(3) :
+					TIM2->CCR1 = 12;				//Sets the duty cycle to 6%, and Position to 3
+				case(4) :
+					TIM2->CCR1 = 16;				//Sets the duty cycle to 8%, and Position to 4
+				case(5) :
+					TIM2->CCR1 = 20;				//Sets the duty cycle to 10%, and Position to 5
+				if((0x1F & cmd) >= 6)
+				{
+					USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
 				}
 			}
+	  case(WAIT):
+			wait_flag = 0;
+			delay = (0x1F & cmd);		// Im not sure what the units are of the result. Need to confirm they are same as cnt1 and cnt. also need to add (1\10) second to result.
+		  cnt = TIM2->CCR1;
+			while(wait_flag == 0)
+			{								
+				while(!(TIM2->SR & TIM_SR_CC1IF)){};			
+				cnt1 = TIM2->CCR1;
+				if((cnt1-cnt)>= delay)
+				{
+					wait_flag = 1;
+				}
+			}
+		case(LOOP_START):
+			
+		case(END_LOOP):
+			
+		case(RECIPE_END):
+			
 	}
-	rxByte = 'n';
-	while(rxByte == 'y' && pass)
-	{		
-		//USART_Write(USART2, (uint8_t *)another_session, strlen(another_session));
-		rxByte = USART_Read(USART2);
-		if (rxByte == 'Y' || rxByte == 'y'){
-			rxByte = 'y';
-		}
-	}
-	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 }
 
 // POST, aka 'Power On Self Test' is meant to check that there is XXXX

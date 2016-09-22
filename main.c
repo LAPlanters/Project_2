@@ -33,19 +33,21 @@ int main(void){
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
 	// reset GPIO A for pa0 and pa1
 	GPIOA->MODER &= ~(0x3);
-	GPIOA->MODER &= ~(0xC);	
+	GPIOA->MODER &= ~(0x12);
+	
 	
 	// set GPIO PA0 to be AF1 or, tim2
 	GPIOA->MODER |= 0x2;
 	GPIOA->MODER |= 0x8;
-	
 	// configure the correct AF register to select the alternate function (timer2)
 	// we want pin 0 so we use AFR[0]. pins 1-7 are there, pins 8-15 are with AFR[1]
 	// AF1 is '0001'
 	GPIOA->AFR[0] &= ~(0xF);
 	GPIOA->AFR[0] &= ~(0xF0);
 	GPIOA->AFR[0] |= (0x1);
-	GPIOA->AFR[0] |= (0x10);	
+	GPIOA->AFR[0] |= (0x10);
+	
+	
 	
 	/*
 		TIMER CAPTURE SETUP

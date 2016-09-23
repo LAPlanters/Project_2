@@ -26,6 +26,7 @@ static int post_test(void);
 void config_port_a(void);
 void config_timer(void);
 int calc_servo_move(int position, int curr_duty_cycle);
+int process_wait(int wait_factor);
 void read_recipe(int recipe[]);
 //uint8_t cmd_read(unsigned char cmd);
 
@@ -33,9 +34,11 @@ void read_recipe(int recipe[]);
 int main(void){
 	char rxByte = 'y';
 	int		pass = 0;
-	int recipe1[1];
+	int recipe1[3];
 	
-	recipe1[0] = 0x25;
+	recipe1[0] = MOV+4;
+	recipe1[1] = WAIT+30;
+	recipe1[2] = MOV+1;
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
 	LED_Init();
@@ -98,6 +101,30 @@ int calc_servo_move(int pos, int curr_duty_cycle)
 	return next_duty_cycle;
 }
 
+// will process a wait by at least 1/10 of a second.
+// returns 1 if argument was in bounds, 0 if not
+int process_wait(int wait_factor)
+{
+	int status = 0;
+	// since we are using 20ms periods, we need to wait for counter to reset 5 X wait_factor
+	int num_iterations;
+	int x;
+	int test = 0;
+	
+	if(0 <= wait_factor && wait_factor <= 31)
+	{
+		num_iterations = 5 + (5 * wait_factor);
+		for(x = 0; x < num_iterations; x++)
+		{
+			while(TIM2->CNT != 0){}
+			test++;
+		}
+		status = 1;
+	}
+	
+	return status;
+}
+
 void read_recipe(int recipe[])
 {
 	int opcode = 0;
@@ -120,6 +147,10 @@ void read_recipe(int recipe[])
 			// make sure we didn't violate the bounds -- method will return 0 if so
 			if(command_result)
 				TIM2->CCR1 = command_result;
+		}
+		else if(opcode == WAIT)
+		{
+			process_wait(opcode_argument);
 		}
 	}
 }

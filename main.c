@@ -23,20 +23,28 @@ unsigned char cmd[] = "        ";
 
 // function prototypes
 static int post_test(void);
-int init(void);
-uint8_t cmd_read(unsigned char cmd);
+void config_port_a(void);
+void config_timer(void);
+int calc_servo_move(int position, int curr_duty_cycle);
+void read_recipe(int recipe[]);
+//uint8_t cmd_read(unsigned char cmd);
 
 
 int main(void){
 	char rxByte = 'y';
 	int		pass = 0;
+	int recipe1[1];
+	
+	recipe1[0] = 0x25;
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
 	LED_Init();
 	UART2_Init();
 	
-	init();
-	
+	config_port_a();
+	config_timer();
+	// always have the pwm going?
+	TIM2->CR1 |= TIM_CR1_CEN;
 	
 	// write that we are starting post test
 	USART_Write(USART2, (uint8_t *)str, strlen(str));
@@ -54,6 +62,10 @@ int main(void){
 				}
 			}
 	}
+	
+	read_recipe(recipe1);
+	while(1){}
+	
 	rxByte = 'n';
 	while(rxByte == 'y' && pass)
 	{		
@@ -64,13 +76,56 @@ int main(void){
 		}
 	}
 	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
+	TIM2->CR1 &= ~(TIM_CR1_CEN);
 }
-int init(void)
+
+// 4 - 20 is what the guide says.. i think the math needs to be revisited
+// with our psc we cant put in anything at the 10us precision ... we may need to lessen by factor of 10
+// sending cur duty cycle as arg now because we need to delay in this function based on how far mov is.. yet to be implemented
+int calc_servo_move(int pos, int curr_duty_cycle)
 {
-	/*
-		GPIO AND ALTERNATE FUNCTION SETUP
+	double next_duty_cycle = 0;
+	//double coeff = (16/5);
+	int coeff = 3;
+	//double offset = 3.88;
+	int offset = 4;
 	
-	*/
+	if(0 <= pos && pos <= 5)
+		next_duty_cycle = (pos * coeff) + offset;
+	else
+		next_duty_cycle = 0;
+	
+	return next_duty_cycle;
+}
+
+void read_recipe(int recipe[])
+{
+	int opcode = 0;
+	int opcode_argument = 0;
+	int op_mask = 0xE0;
+	int op_arg_mask = 0x1F;
+	double command_result = 0;
+	int recipe_len = sizeof(recipe);
+	int x;
+	
+	for(x=0; x < recipe_len; x++)
+	{
+		// mask the element to get the opcode - the top 3 bits
+		opcode = recipe[x] & op_mask;
+		opcode_argument = recipe[x] & op_arg_mask;
+		if(opcode == MOV)
+		{
+			// do we need to set this for both servos?
+			command_result = calc_servo_move(opcode_argument, TIM2->CCR1);
+			// make sure we didn't violate the bounds -- method will return 0 if so
+			if(command_result)
+				TIM2->CCR1 = command_result;
+		}
+	}
+}
+
+void config_port_a()
+{
 	// IO port A clock enable
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
 	// reset GPIO A for pa0 and pa1
@@ -89,10 +144,10 @@ int init(void)
 	GPIOA->AFR[0] &= ~(0xF0);
 	GPIOA->AFR[0] |= (0x1);
 	GPIOA->AFR[0] |= (0x10);
-	
-	/*
-		TIMER CAPTURE SETUP
-	*/
+}
+
+void config_timer()
+{
 	// enable clock for Tim2
 	// APB1EN is peripheral clock enable register 1
 	// TIM2 is the first bit! turn to 1 to enable
@@ -137,9 +192,9 @@ int init(void)
 	
 	// make sure the timer is stopped
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
-	return 0;
 }
-uint8_t cmd_read(unsigned char cmd)
+
+/*uint8_t cmd_read(unsigned char cmd)
 {
 	int wait_flag;
 	uint8_t delay;
@@ -180,23 +235,17 @@ uint8_t cmd_read(unsigned char cmd)
 					wait_flag = 1;
 				}
 			}
-		case(LOOP_START):
+		//case(LOOP_START):
 			
-		case(END_LOOP):
+		//case(END_LOOP):
 			
-		case(RECIPE_END):
+		//case(RECIPE_END):
 			
 	}
-}
+}*/
 
 // POST, aka 'Power On Self Test' is meant to check that there is XXXX
 static int post_test()
 {
-	// we give the time limit multiplied by the psc
-	TIM2->CR1 |= TIM_CR1_CEN;
-	
-	while(1){}
-	
-	TIM2->CR1 &= ~(TIM_CR1_CEN);
 	return 1;
 }

@@ -19,8 +19,24 @@ char str[] = "POST routine starting...\r\n";
 char post_ok[] = "POST routine successful\r\n";
 char post_fail[] = "POST routine failed. Would you like to continue(y,n)?\r\n";
 char good_bye[] = "Goodbye\r\n";
-char out_range[] = "Error. you have entered a parameter out of the bounds of the Mnemonic command";
+char out_range[] = "Error. you have entered a parameter out of the bounds of the Mnemonic command\r\n";
+char prompt[] = "\r\n>";
+char pause_first1[] = "Error: either Servo 1 needs to be paused before moving, or servo 1 is to the extreme position. Trouble shoot and try again.\r\n";
+char pause_first2[] = "Error: either Servo 2 needs to be paused before moving, or servo 2 is to the extreme position. Trouble shoot and try again.\r\n";
+char no_override1[] = "No over ride command executed on servo 1";
+char no_override2[] = "No over ride command executed on servo 2";
 unsigned char cmd[] = "        ";
+int isr_flag = 0;
+int enter = 0;
+uint8_t temp = ' ';
+unsigned char u_cmd[6];
+int k;
+bool run_servo1 = true;			// These flags will help us execute the user entered commands 
+bool run_servo2 = true;
+bool restart1 = false;
+bool restart2 = false;
+
+#pragma interupt_handler key_board
 
 // function prototypes
 static int post_test(void);
@@ -29,6 +45,8 @@ void config_timer(void);
 int calc_servo_move(int position, int curr_duty_cycle);
 int process_wait(int wait_factor);
 void read_recipe(int recipe[]);
+void key_board(void);
+void user_cmd(void);
 //uint8_t cmd_read(unsigned char cmd);
 
 
@@ -128,70 +146,304 @@ int process_wait(int wait_factor)
 
 void read_recipe(int recipe[])
 {
-	int opcode = 0;
-	int opcode_argument = 0;
+	int opcode1 = 0;
+	int opcode_argument1 = 0;
+	int opcode2 = 0;
+	int opcode_argument2 = 0;
 	int op_mask = 0xE0;
 	int op_arg_mask = 0x1F;
 	double command_result = 0;
 	int recipe_len = sizeof(recipe);
 	int x;
-	int loop;
-	int num_loop = 0;
-	bool loop_flag = false;
-	bool loop_end = false;
+	int y;
+	int loop1;
+	int loop2;
+	int num_loop1 = 0;
+	bool loop_flag1 = false;
+	int num_loop2 = 0;
+	bool loop_flag2 = false;
+	bool loop_end1 = false;
+	bool loop_end2 = false;
 	
-	loop = 0;			//Will want this to be zero again if we do a second recipe
-	for(x=0; x < recipe_len; x++)
+	loop1 = 0;			//Will want this to be zero again if we do a second recipe
+	loop2 = 0;
+	num_loop1 = 0;
+	num_loop2 = 0;
+	x = 0;
+	y = 0;
+	while( x <= recipe_len && y <= recipe_len)
 	{
-		// mask the element to get the opcode - the top 3 bits
-		opcode = recipe[x] & op_mask;
-		opcode_argument = recipe[x] & op_arg_mask;
-		if(opcode == MOV)
+		if(restart1)			// If the flag is set the recipe read will move to the start of the array.
 		{
-			// do we need to set this for both servos?
-			command_result = calc_servo_move(opcode_argument, TIM2->CCR1);
+			x = 0;
+		}
+		if(restart2)
+		{
+			y = 0;
+		}
+		// mask the element to get the opcode - the top 3 bits
+		opcode1 = recipe[x] & op_mask;
+		opcode_argument1 = recipe[x] & op_arg_mask;
+		opcode2 = recipe[y] & op_mask;
+		opcode_argument2= recipe[y] & op_arg_mask;		
+		if(opcode1 == MOV)
+		{
+			command_result = calc_servo_move(opcode_argument1, TIM2->CCR1);  		// I dont think we need to include current duty cycle in this function as it is not used
 			// make sure we didn't violate the bounds -- method will return 0 if so
 			if(command_result)
 			{
-				TIM2->CCR1 = command_result;
+				if(run_servo1)
+				{
+					TIM2->CCR1 = command_result;
+				}				
 			}
 			else
 			{
 				USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
 			}
 		}
-		else if(opcode == WAIT)
+		if(opcode2 == MOV)
 		{
-			process_wait(opcode_argument);
-		}
-		else if(opcode == LOOP_START)			// Use boolen flag to allow counter below to count the following number of elements to be in the loop
-		{
-			loop_flag = true;
-			num_loop = opcode_argument;			// Number of times the loop is iterated
-		}
-		else if(opcode == END_LOOP)				
-		{
-			loop_flag = false;
-			loop_end = true;								// This boolean flag tells us when to decrement our num_loop
-		}
-		else if(opcode == RECIPE_END)
-		{
-			break;
-		}
-		if(loop_flag)
-		{
-			loop++;
-		}
-		if(loop_end)
-		{
-			x = x - loop+2;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
-			if(num_loop > 0)
+			command_result = calc_servo_move(opcode_argument2, TIM2->CCR2);  		// I dont think we need to include current duty cycle in this function as it is not used
+			// make sure we didn't violate the bounds -- method will return 0 if so
+			if(command_result)
 			{
-				num_loop--;
+				if(run_servo2)
+				{
+					TIM2->CCR2 = command_result;
+				}
+			}
+			else
+			{
+				USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
 			}
 		}
-		
+		if(opcode1 == WAIT)
+		{
+			process_wait(opcode_argument1);
+		}
+		if(opcode2 == WAIT)
+		{
+			process_wait(opcode_argument2);
+		}
+		if(opcode1 == LOOP_START)			// Use boolen flag to allow counter below to count the following number of elements to be in the loop
+		{
+			loop_flag1 = true;
+			num_loop1 = opcode_argument1;			// Number of times the loop is iterated
+		}
+		if(opcode2 == LOOP_START)			// Use boolen flag to allow counter below to count the following number of elements to be in the loop
+		{
+			loop_flag2 = true;
+			num_loop2 = opcode_argument2;			// Number of times the loop is iterated
+		}
+		if(opcode1 == END_LOOP)				
+		{
+			loop_flag1 = false;
+			loop_end1 = true;								// This boolean flag tells us when to decrement our num_loop
+		}
+		else if(opcode1 == RECIPE_END)
+		{
+			x = recipe_len;
+		}
+		else if(opcode2 == RECIPE_END)
+		{
+			y = recipe_len;
+		}
+		if(loop_flag1)
+		{
+			loop1++;
+		}
+		if(loop_flag2)
+		{
+			loop2++;
+		}
+		if(loop_end1)
+		{
+			x = x - loop1+1;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
+			if(num_loop1 > 0)					// but x will be iterated after this loop so just add 1 
+			{
+				num_loop1--;
+				loop_end1 = false;
+			}
+		}
+		if(loop_end2)
+		{
+			y = y - loop2+1;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
+			if(num_loop2 > 0)					// but x will be iterated after this loop so just add 1 
+			{
+				num_loop2--;
+				loop_end2 = false;
+			}
+		}
+		if(x < recipe_len)
+		{
+			x++;
+		}
+		if(y < recipe_len)
+		{
+			y++;
+		}
 	}
+}
+
+
+// Create interupt from a keyboard entry
+void key_board(void)
+{
+	temp = ' ';
+	temp = USART_Read(USART2);	
+	u_cmd[k] = temp;		// adjust the ASCII values to mean something 
+	USART_Write(USART2,&temp,1);
+	k++;
+	if(u_cmd[2] == 60 && (u_cmd[3] == 67 || u_cmd[3] == 99) && (u_cmd[4] == 82 || u_cmd[4] == 114) && u_cmd[5] == 62) 	// checks for "<CR>" in terms of ascii values
+	{
+		user_cmd();
+	}	
+  if(k >= 6)
+	{
+		memset(&u_cmd[0], 0, sizeof(u_cmd));		// clear the array. either too many charecters entered, the wrong charecters were entered, or we already processed the user command
+		USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));						// Shows user the prompt charecter ">"
+	}
+}
+// Create function to parse user command entries via the keyboard
+void user_cmd(void)
+{
+	switch(u_cmd[0])
+	{
+		case(80):			//creat a pause mechanism
+			run_servo1 = false;
+			break;
+		case(112):
+			run_servo1 = false;
+			break;
+		case(67):			//Create a continue mechanism
+			run_servo1 = true;
+			break;
+		case(99):
+			run_servo1 = true;
+			break;
+		case(82):			 //Create a move 1 to the right position mechanism
+			if(run_servo1 == false && TIM2->CCR1 < 24)
+			{
+				TIM2->CCR1 = TIM2->CCR1 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
+			}
+			if(run_servo1 || (TIM2->CCR1 == 24))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
+			}
+			break;
+		case(114):
+			if(run_servo1 == false && TIM2->CCR1 < 24)
+			{
+				TIM2->CCR1 = TIM2->CCR1 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
+			}
+			if(run_servo1 || (TIM2->CCR1 == 24))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
+			}
+			break;
+		case(76):				// Create a move 1 to the left postion mechanism
+			if(run_servo1 == false && TIM2->CCR1 > 4)
+			{
+				TIM2->CCR1 = TIM2->CCR1 - 4;			// For now we will assume moving left means to sutract. Will need to verify when testing
+			}
+			if(run_servo1 || (TIM2->CCR1 == 4))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
+			}
+			break;
+		case(108):
+			if(run_servo1 == false && TIM2->CCR1 > 4)
+			{
+				TIM2->CCR1 = TIM2->CCR1 - 4;			// For now we will assume moving left means to subtract. Will need to verify when testing
+			}
+			if(run_servo1 || (TIM2->CCR1 == 4))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
+			}
+			break;
+		case(78):					// Create a no operation command/prompt
+			USART_Write(USART2, (uint8_t *)no_override1, strlen(no_override1));
+			break;
+		case(110):
+			USART_Write(USART2, (uint8_t *)no_override1, strlen(no_override1));
+			break;
+		case(69):			// Raise a flag which will reset x in the for loop for the recipe_read
+			restart1 = true;
+			break;
+		case(98):
+			restart1 = true;
+			break;			
+	}
+	
+	switch(u_cmd[1])
+	{
+		case(80):			//creat a pause mechanism
+			run_servo2 = false;
+			break;
+		case(112):
+			run_servo2 = false;
+			break;
+		case(67):			//Create a continue mechanism
+			run_servo2 = true;
+			break;
+		case(99):
+			run_servo2 = true;
+			break;
+		case(82):			 //Create a move 1 to the right position mechanism
+			if(run_servo2 == false && TIM2->CCR2 < 24)
+			{
+				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
+			}
+			if(run_servo2 || (TIM2->CCR2 == 24))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
+			}
+			break;
+		case(114):
+			if(run_servo2 == false && TIM2->CCR2 < 24)
+			{
+				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
+			}
+			if(run_servo2 || (TIM2->CCR2 == 24))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
+			}
+			break;
+		case(76):				// Create a move 1 to the left postion mechanism
+			if(run_servo2 == false && TIM2->CCR2 > 4)
+			{
+				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to sutract. Will need to verify when testing
+			}
+			if(run_servo2 || (TIM2->CCR2 == 4))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
+			}
+			break;
+		case(108):
+			if(run_servo2 == false && TIM2->CCR2 > 4)
+			{
+				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to subtract. Will need to verify when testing
+			}
+			if(run_servo2 || (TIM2->CCR2 == 4))
+			{
+				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
+			}
+			break;
+		case(78):					// Create a no operation command/prompt
+			USART_Write(USART2, (uint8_t *)no_override2, strlen(no_override2));
+			break;
+		case(110):
+			USART_Write(USART2, (uint8_t *)no_override2, strlen(no_override2));
+			break;
+		case(69):			// Raise a flag which will reset x in the for loop for the recipe_read
+			restart2 = true;
+			break;
+		case(98):
+			restart2 = true;
+			break;			
+	}
+			
 }
 
 void config_port_a()

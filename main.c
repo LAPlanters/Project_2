@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #define MOV (32)
 #define WAIT (64)
@@ -89,7 +90,7 @@ int calc_servo_move(int pos, int curr_duty_cycle)
 {
 	double next_duty_cycle = 0;
 	//double coeff = (16/5);
-	int coeff = 3;
+	int coeff = 4;
 	//double offset = 3.88;
 	int offset = 4;
 	
@@ -116,7 +117,7 @@ int process_wait(int wait_factor)
 		num_iterations = 5 + (5 * wait_factor);
 		for(x = 0; x < num_iterations; x++)
 		{
-			while(TIM2->CNT != 0){}
+			while(TIM2->CNT != 0){};
 			test++;
 		}
 		status = 1;
@@ -134,7 +135,12 @@ void read_recipe(int recipe[])
 	double command_result = 0;
 	int recipe_len = sizeof(recipe);
 	int x;
+	int loop;
+	int num_loop = 0;
+	bool loop_flag = false;
+	bool loop_end = false;
 	
+	loop = 0;			//Will want this to be zero again if we do a second recipe
 	for(x=0; x < recipe_len; x++)
 	{
 		// mask the element to get the opcode - the top 3 bits
@@ -146,12 +152,45 @@ void read_recipe(int recipe[])
 			command_result = calc_servo_move(opcode_argument, TIM2->CCR1);
 			// make sure we didn't violate the bounds -- method will return 0 if so
 			if(command_result)
+			{
 				TIM2->CCR1 = command_result;
+			}
+			else
+			{
+				USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
+			}
 		}
 		else if(opcode == WAIT)
 		{
 			process_wait(opcode_argument);
 		}
+		else if(opcode == LOOP_START)			// Use boolen flag to allow counter below to count the following number of elements to be in the loop
+		{
+			loop_flag = true;
+			num_loop = opcode_argument;			// Number of times the loop is iterated
+		}
+		else if(opcode == END_LOOP)				
+		{
+			loop_flag = false;
+			loop_end = true;								// This boolean flag tells us when to decrement our num_loop
+		}
+		else if(opcode == RECIPE_END)
+		{
+			break;
+		}
+		if(loop_flag)
+		{
+			loop++;
+		}
+		if(loop_end)
+		{
+			x = x - loop+2;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
+			if(num_loop > 0)
+			{
+				num_loop--;
+			}
+		}
+		
 	}
 }
 

@@ -30,7 +30,8 @@ char restart_recipe2[] = "Restarting recipe 2";
 unsigned char cmd[] = "        ";
 int isr_flag = 0;
 int enter = 0;
-int recipe1[19] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
+//int recipe1[19] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
+int recipe1[5] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0};
 uint8_t temp = ' ';
 unsigned char u_cmd[6];
 int k;
@@ -120,6 +121,11 @@ int calc_servo_move(int pos, int curr_duty_cycle)
 	else
 		next_duty_cycle = 0;
 	
+	// we want to wait 200ms per position - that means we get abs value of our pos delta
+	// we would then div by 4 to get our 'grades' of positions, and then we need to mult by 2
+	// in order to use our process_wait position which takes in an arg that is our mult of tenth of second
+	process_wait(abs(next_duty_cycle - curr_duty_cycle) / 2);
+	
 	return next_duty_cycle;
 }
 
@@ -132,15 +138,17 @@ int process_wait(int wait_factor)
 	int num_iterations;
 	int x;
 	int test = 0;
+	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 	
 	if(0 <= wait_factor && wait_factor <= 31)
 	{
 		num_iterations = 5 + (5 * wait_factor);
 		for(x = 0; x < num_iterations; x++)
 		{
-			while(TIM2->CNT != 0){};
-			test++;
+			while(TIM2->CNT == 0){}
+			while(TIM2->CNT != 0){}
 		}
+		USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 		status = 1;
 	}
 	
@@ -157,8 +165,9 @@ void read_recipe(int recipe[])
 	int op_arg_mask = 0x1F;
 	double command_result = 0;
 	int recipe_len = sizeof(recipe1);		// If left as just recipe it gave the wrong size of the array. need to trouble shoot, otherwise can only use 1 recipe at a time
-	int x;
-	int y;
+	int servo1Itr;
+	int servo2Itr;
+	
 	int loop1;
 	int loop2;
 	int num_loop1 = 0;
@@ -172,27 +181,27 @@ void read_recipe(int recipe[])
 	loop2 = 0;
 	num_loop1 = 0;
 	num_loop2 = 0;
-	x = 0;
-	y = 0;
-	while( x <= recipe_len && y <= recipe_len)
+	servo1Itr = 0;
+	servo2Itr = 0;
+	while( servo1Itr <= recipe_len && servo2Itr <= recipe_len)
 	{
 		if(restart1)			// If the flag is set the recipe read will move to the start of the array.
 		{
-			x = 0;
+			servo1Itr = 0;
 		}
 		if(restart2)
 		{
-			y = 0;
+			servo2Itr = 0;
 		}
-		if((TIM2->SR & 2) != 0)
+		/*if((TIM2->SR & 2) != 0)
 		{
 			key_board();
-		}
+		}*/
 		// mask the element to get the opcode - the top 3 bits
-		opcode1 = recipe[x] & op_mask;
-		opcode_argument1 = recipe[x] & op_arg_mask;
-		opcode2 = recipe[y] & op_mask;
-		opcode_argument2= recipe[y] & op_arg_mask;		
+		opcode1 = recipe[servo1Itr] & op_mask;
+		opcode_argument1 = recipe[servo1Itr] & op_arg_mask;
+		opcode2 = recipe[servo2Itr] & op_mask;
+		opcode_argument2= recipe[servo2Itr] & op_arg_mask;		
 		if(opcode1 == MOV)
 		{
 			command_result = calc_servo_move(opcode_argument1, TIM2->CCR1);  		// I dont think we need to include current duty cycle in this function as it is not used
@@ -255,11 +264,11 @@ void read_recipe(int recipe[])
 		}
 		if(opcode1 == RECIPE_END)
 		{
-			x = recipe_len+1;
+			servo1Itr = recipe_len+1;
 		}
 		if(opcode2 == RECIPE_END)
 		{
-			y = recipe_len+1;
+			servo2Itr = recipe_len+1;
 		}
 		if(loop_flag1)
 		{
@@ -271,34 +280,34 @@ void read_recipe(int recipe[])
 		}
 		if(loop_end1)
 		{
-			if(num_loop1 > 0)					// but x will be iterated after this loop so just add 1 
+			if(num_loop1 > 0)					// but servo1Itr will be iterated after this loop so just add 1 
 			{
-				x = x - loop1;
+				servo1Itr = servo1Itr - loop1;
 				num_loop1--;
 				loop_end1 = false;
 			}
 		}
 		if(loop_end2)
 		{
-			if(num_loop2 > 0)					// but x will be iterated after this loop so just add 1 
+			if(num_loop2 > 0)					// but servo1Itr will be iterated after this loop so just add 1 
 			{
-				y = y - loop2;
+				servo2Itr = servo2Itr - loop2;
 				num_loop2--;
 				loop_end2 = false;
 			}
 		}
-		if(x < recipe_len)				// increment for next recipe.
+		if(servo1Itr < recipe_len)				// increment for neservo1Itrt recipe.
 		{
 			if(run_servo1)
 			{
-				x++;
+				servo1Itr++;
 			}
 		}
-		if(y < recipe_len)
+		if(servo2Itr < recipe_len)
 		{
 			if(run_servo2)
 			{
-				y++;
+				servo2Itr++;
 			}
 		}
 	}
@@ -316,7 +325,7 @@ void key_board(void)
 	{
 		k++;
 	}
-	if(u_cmd[2] == 60 && (u_cmd[3] == 67 || u_cmd[3] == 99) && (u_cmd[4] == 82 || u_cmd[4] == 114) && u_cmd[5] == 62) 	// checks for "<CR>" in terms of ascii values
+	if(u_cmd[2] == 13) 	// checks for "<CR>" in terms of ascii values
 	{
 		user_cmd();
 	}	
@@ -541,57 +550,6 @@ void config_timer()
 	// make sure the timer is stopped
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
 }
-
-/*uint8_t cmd_read(unsigned char cmd)
-{
-	int wait_flag;
-	uint8_t delay;
-	static uint32_t cnt;
-	static uint32_t cnt1;
-	switch(0xE0 & cmd )
-	{
-		case(MOV):
-			switch(0x1F & cmd)
-			{
-				case(0) :
-					TIM2->CCR1 = 0;				//Sets the duty cycle to 0%, and Position to 0
-				case(1) :
-					TIM2->CCR1 = 4;				//Sets the duty cycle to 2%, and Position to 1
-				case(2) :
-					TIM2->CCR1 = 8;				//Sets the duty cycle to 4%, and Position to 2
-				case(3) :
-					TIM2->CCR1 = 12;				//Sets the duty cycle to 6%, and Position to 3
-				case(4) :
-					TIM2->CCR1 = 16;				//Sets the duty cycle to 8%, and Position to 4
-				case(5) :
-					TIM2->CCR1 = 20;				//Sets the duty cycle to 10%, and Position to 5
-				if((0x1F & cmd) >= 6)
-				{
-					USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
-				}
-			}
-	  case(WAIT):
-			wait_flag = 0;
-			delay = (0x1F & cmd);		// Im not sure what the units are of the result. Need to confirm they are same as cnt1 and cnt. also need to add (1\10) second to result.
-		  cnt = TIM2->CCR1;
-			while(wait_flag == 0)
-			{								
-				while(!(TIM2->SR & TIM_SR_CC1IF)){};			
-				cnt1 = TIM2->CCR1;
-				if((cnt1-cnt)>= delay)
-				{
-					wait_flag = 1;
-				}
-			}
-		//case(LOOP_START):
-			
-		//case(END_LOOP):
-			
-		//case(RECIPE_END):
-			
-	}
-}*/
-
 // POST, aka 'Power On Self Test' is meant to check that there is XXXX
 static int post_test()
 {

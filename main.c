@@ -25,9 +25,12 @@ char pause_first1[] = "Error: either Servo 1 needs to be paused before moving, o
 char pause_first2[] = "Error: either Servo 2 needs to be paused before moving, or servo 2 is to the extreme position. Trouble shoot and try again.\r\n";
 char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
+char restart_recipe1[] = "Restarting recipe 1";
+char restart_recipe2[] = "Restarting recipe 2";
 unsigned char cmd[] = "        ";
 int isr_flag = 0;
 int enter = 0;
+int recipe1[19] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
 uint8_t temp = ' ';
 unsigned char u_cmd[6];
 int k;
@@ -35,8 +38,6 @@ bool run_servo1 = true;			// These flags will help us execute the user entered c
 bool run_servo2 = true;
 bool restart1 = false;
 bool restart2 = false;
-
-#pragma interupt_handler key_board
 
 // function prototypes
 static int post_test(void);
@@ -53,11 +54,13 @@ void user_cmd(void);
 int main(void){
 	char rxByte = 'y';
 	int		pass = 0;
-	int recipe1[3];
 	
-	recipe1[0] = MOV+4;
-	recipe1[1] = WAIT+30;
-	recipe1[2] = MOV+1;
+	
+//	recipe1[0] = MOV+4;
+//	recipe1[1] = WAIT+30;
+//	recipe1[2] = MOV+1;
+//	recipe1[3] = WAIT+20;
+//	recipe1[4] = MOV+5;
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
 	LED_Init();
@@ -153,7 +156,7 @@ void read_recipe(int recipe[])
 	int op_mask = 0xE0;
 	int op_arg_mask = 0x1F;
 	double command_result = 0;
-	int recipe_len = sizeof(recipe);
+	int recipe_len = sizeof(recipe1);		// If left as just recipe it gave the wrong size of the array. need to trouble shoot, otherwise can only use 1 recipe at a time
 	int x;
 	int y;
 	int loop1;
@@ -180,6 +183,10 @@ void read_recipe(int recipe[])
 		if(restart2)
 		{
 			y = 0;
+		}
+		if((TIM2->SR & 2) != 0)
+		{
+			key_board();
 		}
 		// mask the element to get the opcode - the top 3 bits
 		opcode1 = recipe[x] & op_mask;
@@ -241,13 +248,18 @@ void read_recipe(int recipe[])
 			loop_flag1 = false;
 			loop_end1 = true;								// This boolean flag tells us when to decrement our num_loop
 		}
-		else if(opcode1 == RECIPE_END)
+		if(opcode2 == END_LOOP)				
 		{
-			x = recipe_len;
+			loop_flag2 = false;
+			loop_end2 = true;								// This boolean flag tells us when to decrement our num_loop
 		}
-		else if(opcode2 == RECIPE_END)
+		if(opcode1 == RECIPE_END)
 		{
-			y = recipe_len;
+			x = recipe_len+1;
+		}
+		if(opcode2 == RECIPE_END)
+		{
+			y = recipe_len+1;
 		}
 		if(loop_flag1)
 		{
@@ -259,29 +271,35 @@ void read_recipe(int recipe[])
 		}
 		if(loop_end1)
 		{
-			x = x - loop1+1;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
 			if(num_loop1 > 0)					// but x will be iterated after this loop so just add 1 
 			{
+				x = x - loop1;
 				num_loop1--;
 				loop_end1 = false;
 			}
 		}
 		if(loop_end2)
 		{
-			y = y - loop2+1;						// add 2 because we loop++ before moving to next element after loop_start and we want to start 1 above loop_start
 			if(num_loop2 > 0)					// but x will be iterated after this loop so just add 1 
 			{
+				y = y - loop2;
 				num_loop2--;
 				loop_end2 = false;
 			}
 		}
-		if(x < recipe_len)
+		if(x < recipe_len)				// increment for next recipe.
 		{
-			x++;
+			if(run_servo1)
+			{
+				x++;
+			}
 		}
 		if(y < recipe_len)
 		{
-			y++;
+			if(run_servo2)
+			{
+				y++;
+			}
 		}
 	}
 }
@@ -293,8 +311,11 @@ void key_board(void)
 	temp = ' ';
 	temp = USART_Read(USART2);	
 	u_cmd[k] = temp;		// adjust the ASCII values to mean something 
-	USART_Write(USART2,&temp,1);
-	k++;
+	USART_Write(USART2,&temp,1);	
+	if(temp != ' ')
+	{
+		k++;
+	}
 	if(u_cmd[2] == 60 && (u_cmd[3] == 67 || u_cmd[3] == 99) && (u_cmd[4] == 82 || u_cmd[4] == 114) && u_cmd[5] == 62) 	// checks for "<CR>" in terms of ascii values
 	{
 		user_cmd();
@@ -303,6 +324,7 @@ void key_board(void)
 	{
 		memset(&u_cmd[0], 0, sizeof(u_cmd));		// clear the array. either too many charecters entered, the wrong charecters were entered, or we already processed the user command
 		USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));						// Shows user the prompt charecter ">"
+		k = 0;
 	}
 }
 // Create function to parse user command entries via the keyboard
@@ -310,7 +332,7 @@ void user_cmd(void)
 {
 	switch(u_cmd[0])
 	{
-		case(80):			//creat a pause mechanism
+		case(80):			//Create a pause mechanism
 			run_servo1 = false;
 			break;
 		case(112):
@@ -327,7 +349,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR1 = TIM2->CCR1 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
 			}
-			if(run_servo1 || (TIM2->CCR1 == 24))
+			if(run_servo1 == true || (TIM2->CCR1 == 24))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
 			}
@@ -337,7 +359,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR1 = TIM2->CCR1 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
 			}
-			if(run_servo1 || (TIM2->CCR1 == 24))
+			if(run_servo1 == true || (TIM2->CCR1 == 24))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
 			}
@@ -347,7 +369,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR1 = TIM2->CCR1 - 4;			// For now we will assume moving left means to sutract. Will need to verify when testing
 			}
-			if(run_servo1 || (TIM2->CCR1 == 4))
+			if(run_servo1 == true || (TIM2->CCR1 == 4))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
 			}
@@ -357,7 +379,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR1 = TIM2->CCR1 - 4;			// For now we will assume moving left means to subtract. Will need to verify when testing
 			}
-			if(run_servo1 || (TIM2->CCR1 == 4))
+			if(run_servo1 == true || (TIM2->CCR1 == 4))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first1, strlen(pause_first1));
 			}
@@ -368,11 +390,13 @@ void user_cmd(void)
 		case(110):
 			USART_Write(USART2, (uint8_t *)no_override1, strlen(no_override1));
 			break;
-		case(69):			// Raise a flag which will reset x in the for loop for the recipe_read
+		case(66):			// Raise a flag which will reset x in the for loop for the recipe_read
 			restart1 = true;
+			USART_Write(USART2, (uint8_t *)restart_recipe1, strlen(restart_recipe1));
 			break;
 		case(98):
 			restart1 = true;
+			USART_Write(USART2, (uint8_t *)restart_recipe1, strlen(restart_recipe1));
 			break;			
 	}
 	
@@ -395,7 +419,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
 			}
-			if(run_servo2 || (TIM2->CCR2 == 24))
+			if(run_servo2 == true || (TIM2->CCR2 == 24))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
 			}
@@ -405,7 +429,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
 			}
-			if(run_servo2 || (TIM2->CCR2 == 24))
+			if(run_servo2 == true || (TIM2->CCR2 == 24))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
 			}
@@ -415,7 +439,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to sutract. Will need to verify when testing
 			}
-			if(run_servo2 || (TIM2->CCR2 == 4))
+			if(run_servo2 == true || (TIM2->CCR2 == 4))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
 			}
@@ -425,7 +449,7 @@ void user_cmd(void)
 			{
 				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to subtract. Will need to verify when testing
 			}
-			if(run_servo2 || (TIM2->CCR2 == 4))
+			if(run_servo2 == true || (TIM2->CCR2 == 4))
 			{
 				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
 			}
@@ -436,11 +460,13 @@ void user_cmd(void)
 		case(110):
 			USART_Write(USART2, (uint8_t *)no_override2, strlen(no_override2));
 			break;
-		case(69):			// Raise a flag which will reset x in the for loop for the recipe_read
+		case(66):			// Raise a flag which will reset x in the for loop for the recipe_read
 			restart2 = true;
+			USART_Write(USART2, (uint8_t *)restart_recipe2, strlen(restart_recipe2));
 			break;
 		case(98):
 			restart2 = true;
+		USART_Write(USART2, (uint8_t *)restart_recipe2, strlen(restart_recipe2));
 			break;			
 	}
 			

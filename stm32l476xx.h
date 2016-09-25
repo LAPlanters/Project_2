@@ -7344,7 +7344,6 @@ typedef struct
 #define  TIM_CCMR1_OC1M_3          ((uint32_t)0x00010000)            /*!<Bit 3 */
 
 #define  TIM_CCMR1_OC1CE           ((uint32_t)0x00000080)            /*!<Output Compare 1 Clear Enable */
-
 #define  TIM_CCMR1_CC2S            ((uint32_t)0x00000300)            /*!<CC2S[1:0] bits (Capture/Compare 2 Selection) */
 #define  TIM_CCMR1_CC2S_0          ((uint32_t)0x00000100)            /*!<Bit 0 */
 #define  TIM_CCMR1_CC2S_1          ((uint32_t)0x00000200)            /*!<Bit 1 */

@@ -33,7 +33,7 @@ int enter = 0;
 //int recipe1[19] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
 int recipe1[5] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0};
 uint8_t temp = ' ';
-unsigned char u_cmd[6];
+unsigned char u_cmd[3];
 int k;
 bool run_servo1 = true;			// These flags will help us execute the user entered commands 
 bool run_servo2 = true;
@@ -48,7 +48,7 @@ int calc_servo_move(int position, int curr_duty_cycle);
 int process_wait(int wait_factor);
 void read_recipe(int recipe[]);
 void key_board(void);
-void user_cmd(void);
+void read_user_cmd(void);
 //uint8_t cmd_read(unsigned char cmd);
 
 
@@ -131,6 +131,7 @@ int calc_servo_move(int pos, int curr_duty_cycle)
 
 // will process a wait by at least 1/10 of a second.
 // returns 1 if argument was in bounds, 0 if not
+// while we are waiting, allow for reading user commands
 int process_wait(int wait_factor)
 {
 	int status = 0;
@@ -146,7 +147,9 @@ int process_wait(int wait_factor)
 		for(x = 0; x < num_iterations; x++)
 		{
 			while(TIM2->CNT == 0){}
-			while(TIM2->CNT != 0){}
+			while(TIM2->CNT != 0){
+				read_user_cmd();
+			}
 		}
 		USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 		status = 1;
@@ -315,7 +318,7 @@ void read_recipe(int recipe[])
 
 
 // Create interupt from a keyboard entry
-void key_board(void)
+/*void key_board(void)
 {
 	temp = ' ';
 	temp = USART_Read(USART2);	
@@ -335,10 +338,16 @@ void key_board(void)
 		USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));						// Shows user the prompt charecter ">"
 		k = 0;
 	}
-}
+}*/
 // Create function to parse user command entries via the keyboard
-void user_cmd(void)
+void read_user_cmd(void)
 {
+	char user_in = USART_NonBlock_Read(USART2);
+	if(user_in == 13)
+	{
+		u_cmd[2] = user_in;
+	}
+	// this is for executing a command -- can't be done until we know that the user hits enter
 	switch(u_cmd[0])
 	{
 		case(80):			//Create a pause mechanism
@@ -406,76 +415,6 @@ void user_cmd(void)
 		case(98):
 			restart1 = true;
 			USART_Write(USART2, (uint8_t *)restart_recipe1, strlen(restart_recipe1));
-			break;			
-	}
-	
-	switch(u_cmd[1])
-	{
-		case(80):			//creat a pause mechanism
-			run_servo2 = false;
-			break;
-		case(112):
-			run_servo2 = false;
-			break;
-		case(67):			//Create a continue mechanism
-			run_servo2 = true;
-			break;
-		case(99):
-			run_servo2 = true;
-			break;
-		case(82):			 //Create a move 1 to the right position mechanism
-			if(run_servo2 == false && TIM2->CCR2 < 24)
-			{
-				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
-			}
-			if(run_servo2 == true || (TIM2->CCR2 == 24))
-			{
-				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
-			}
-			break;
-		case(114):
-			if(run_servo2 == false && TIM2->CCR2 < 24)
-			{
-				TIM2->CCR2 = TIM2->CCR2 + 4;			// For now we will assume moving right means to add. Will need to verify when testing
-			}
-			if(run_servo2 == true || (TIM2->CCR2 == 24))
-			{
-				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
-			}
-			break;
-		case(76):				// Create a move 1 to the left postion mechanism
-			if(run_servo2 == false && TIM2->CCR2 > 4)
-			{
-				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to sutract. Will need to verify when testing
-			}
-			if(run_servo2 == true || (TIM2->CCR2 == 4))
-			{
-				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
-			}
-			break;
-		case(108):
-			if(run_servo2 == false && TIM2->CCR2 > 4)
-			{
-				TIM2->CCR2 = TIM2->CCR2 - 4;			// For now we will assume moving left means to subtract. Will need to verify when testing
-			}
-			if(run_servo2 == true || (TIM2->CCR2 == 4))
-			{
-				USART_Write(USART2, (uint8_t *)pause_first2, strlen(pause_first2));
-			}
-			break;
-		case(78):					// Create a no operation command/prompt
-			USART_Write(USART2, (uint8_t *)no_override2, strlen(no_override2));
-			break;
-		case(110):
-			USART_Write(USART2, (uint8_t *)no_override2, strlen(no_override2));
-			break;
-		case(66):			// Raise a flag which will reset x in the for loop for the recipe_read
-			restart2 = true;
-			USART_Write(USART2, (uint8_t *)restart_recipe2, strlen(restart_recipe2));
-			break;
-		case(98):
-			restart2 = true;
-		USART_Write(USART2, (uint8_t *)restart_recipe2, strlen(restart_recipe2));
 			break;			
 	}
 			

@@ -31,6 +31,7 @@ char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
 char restart_recipe1[] = "Restarting recipe 1";
 char restart_recipe2[] = "Restarting recipe 2";
+<<<<<<< HEAD
 char pos_r_prompt[] = "Error: The servo is at the extreme right position. Can not move servo any further to the right!";
 char pos_l_prompt[] = "Error: The servo is at the extreme left position. Can not move servo any further to the left!";
 char good_bye[] = "Goodbye";
@@ -52,6 +53,20 @@ int servo1_loop_state;
 int servo1_num_loop_steps;
 int servo0_pause_state;
 int servo1_pause_state;
+=======
+unsigned char cmd[] = "        ";
+int isr_flag = 0;
+int enter = 0;
+//int recipe1[19] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
+int recipe1[5] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0};
+uint8_t temp = ' ';
+unsigned char u_cmd[6];
+int k;
+bool run_servo1 = true;			// These flags will help us execute the user entered commands 
+bool run_servo2 = true;
+bool restart1 = false;
+bool restart2 = false;
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 
 // function prototypes
 void config_port_a(void);
@@ -129,7 +144,16 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 		set_wait_bank(servo_no, abs(next_duty_cycle - curr_duty_cycle) / 2);
 	}
 	
+<<<<<<< HEAD
 	return status;
+=======
+	// we want to wait 200ms per position - that means we get abs value of our pos delta
+	// we would then div by 4 to get our 'grades' of positions, and then we need to mult by 2
+	// in order to use our process_wait position which takes in an arg that is our mult of tenth of second
+	process_wait(abs(next_duty_cycle - curr_duty_cycle) / 2);
+	
+	return next_duty_cycle;
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 }
 
 // will process a wait by at least 1/10 of a second.
@@ -138,12 +162,31 @@ void set_wait_bank(int servo_no, int wait_factor)
 	// since we are using 20ms periods, we need to wait for counter to reset 5 X wait_factor
 	int num_clock_cycles;
 	int x;
+<<<<<<< HEAD
 
 	num_clock_cycles = 5 + (5 * wait_factor);
 	if (servo_no == 0)
 		servo0_wait_bank += num_clock_cycles;
 	else if (servo_no == 1)
 		servo1_wait_bank += num_clock_cycles;
+=======
+	int test = 0;
+	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
+	
+	if(0 <= wait_factor && wait_factor <= 31)
+	{
+		num_iterations = 5 + (5 * wait_factor);
+		for(x = 0; x < num_iterations; x++)
+		{
+			while(TIM2->CNT == 0){}
+			while(TIM2->CNT != 0){}
+		}
+		USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
+		status = 1;
+	}
+	
+	return status;
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 }
 
 void reset_wait_bank(int servo_no)
@@ -160,6 +203,7 @@ void parse_recipe(int recipe[], int array_size)
 	int opcode_argument = 0;
 	int op_mask = 0xE0;
 	int op_arg_mask = 0x1F;
+<<<<<<< HEAD
 
 	int command_result = 0;
 	int inner_itr = 0;
@@ -175,6 +219,48 @@ void parse_recipe(int recipe[], int array_size)
 		// we send the iterator of this loop to methods that execute commands so that we don't concern ourselves
 		// with hardware specific stuff here
 		for (inner_itr = 0; inner_itr < NUM_SERVO; inner_itr++)
+=======
+	double command_result = 0;
+	int recipe_len = sizeof(recipe1);		// If left as just recipe it gave the wrong size of the array. need to trouble shoot, otherwise can only use 1 recipe at a time
+	int servo1Itr;
+	int servo2Itr;
+	
+	int loop1;
+	int loop2;
+	int num_loop1 = 0;
+	bool loop_flag1 = false;
+	int num_loop2 = 0;
+	bool loop_flag2 = false;
+	bool loop_end1 = false;
+	bool loop_end2 = false;
+	
+	loop1 = 0;			//Will want this to be zero again if we do a second recipe
+	loop2 = 0;
+	num_loop1 = 0;
+	num_loop2 = 0;
+	servo1Itr = 0;
+	servo2Itr = 0;
+	while( servo1Itr <= recipe_len && servo2Itr <= recipe_len)
+	{
+		if(restart1)			// If the flag is set the recipe read will move to the start of the array.
+		{
+			servo1Itr = 0;
+		}
+		if(restart2)
+		{
+			servo2Itr = 0;
+		}
+		/*if((TIM2->SR & 2) != 0)
+		{
+			key_board();
+		}*/
+		// mask the element to get the opcode - the top 3 bits
+		opcode1 = recipe[servo1Itr] & op_mask;
+		opcode_argument1 = recipe[servo1Itr] & op_arg_mask;
+		opcode2 = recipe[servo2Itr] & op_mask;
+		opcode_argument2= recipe[servo2Itr] & op_arg_mask;		
+		if(opcode1 == MOV)
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 		{
 			// make sure we can even read the next command
 			if (is_servo_ready(inner_itr))
@@ -235,6 +321,7 @@ void parse_recipe(int recipe[], int array_size)
 				}
 			}
 		}
+<<<<<<< HEAD
 		// we execute the pausing and check for user input after we have executed every servo's next command
 		manage_scheduling();
 	}
@@ -254,6 +341,21 @@ void read_user_cmd(void)
 		USART_Write(USART2, &user_in, 1);
 		
 		if (user_in == 'x' || user_in == 'X')
+=======
+		if(opcode1 == RECIPE_END)
+		{
+			servo1Itr = recipe_len+1;
+		}
+		if(opcode2 == RECIPE_END)
+		{
+			servo2Itr = recipe_len+1;
+		}
+		if(loop_flag1)
+		{
+			loop1++;
+		}
+		if(loop_flag2)
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 		{
 			/*u_cmd[0] = '\0';
 			u_cmd[1] = '\0';
@@ -261,6 +363,7 @@ void read_user_cmd(void)
 			memset(&u_cmd[0], 0, sizeof(u_cmd));
 			USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));
 		}
+<<<<<<< HEAD
 		else {
 			// need to figure out which index we are at
 			if (u_cmd[0] == '\0')
@@ -279,15 +382,47 @@ void read_user_cmd(void)
 		}
 
 		if (index < 2) 
+=======
+		if(loop_end1)
+		{
+			if(num_loop1 > 0)					// but servo1Itr will be iterated after this loop so just add 1 
+			{
+				servo1Itr = servo1Itr - loop1;
+				num_loop1--;
+				loop_end1 = false;
+			}
+		}
+		if(loop_end2)
+		{
+			if(num_loop2 > 0)					// but servo1Itr will be iterated after this loop so just add 1 
+			{
+				servo2Itr = servo2Itr - loop2;
+				num_loop2--;
+				loop_end2 = false;
+			}
+		}
+		if(servo1Itr < recipe_len)				// increment for neservo1Itrt recipe.
+		{
+			if(run_servo1)
+			{
+				servo1Itr++;
+			}
+		}
+		if(servo2Itr < recipe_len)
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 		{
 			while (x < len_whitelist)
 			{
+<<<<<<< HEAD
 				if (user_in == allowed_user_input[x])
 				{
 					u_cmd[index] = user_in;
 					break;
 				}
 				x++;
+=======
+				servo2Itr++;
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 			}
 		}
 	}
@@ -309,7 +444,11 @@ void manage_scheduling()
 		else
 			num_clock_cycles = servo1_wait_bank;
 	}
+<<<<<<< HEAD
 	else if(servo0_wait_bank > servo1_wait_bank)
+=======
+	if(u_cmd[2] == 13) 	// checks for "<CR>" in terms of ascii values
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0
 	{
 		if(servo1_pause_state != 1)
 			num_clock_cycles = servo1_wait_bank;
@@ -602,3 +741,11 @@ void config_timer()
 	// make sure the timer is stopped
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
 }
+<<<<<<< HEAD
+=======
+// POST, aka 'Power On Self Test' is meant to check that there is XXXX
+static int post_test()
+{
+	return 1;
+}
+>>>>>>> 2eed3cd902b68f2803f52d6a0337973b35840af0

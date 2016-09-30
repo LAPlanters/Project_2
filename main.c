@@ -73,7 +73,7 @@ int find_end_loop(int recipe[], int curr_index, int array_size);
 void set_pause_state(int servo_no, int state);
 int get_curr_duty_cycle(int servo_no);
 void reset_wait_bank(int servo_no);
-int get_servo_pos(int servo_no);
+int get_duty_cycle(int servo_no);
 
 int main(void)
 {
@@ -87,6 +87,8 @@ int main(void)
 	
 	config_port_a();
 	config_timer();
+	Green_LED_On();
+	Red_LED_Off();
 	
 	// enable timer
 	TIM2->CR1 |= TIM_CR1_CEN;
@@ -110,7 +112,7 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 	//double coeff = (16/5);
 	int coeff = 4;
 	//double offset = 3.88;
-	int offset = 5;
+	int offset = 4;
 	int next_duty_cycle = 0;
 	
 	if (0 <= pos && pos <= 5)
@@ -119,9 +121,17 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 		next_duty_cycle = (pos * coeff) + offset;
 
 		if (servo_no == 0)
+		{
+			Green_LED_On();
+			Red_LED_Off();
 			TIM2->CCR1 = next_duty_cycle;
+		}
 		else if (servo_no == 1)
+		{
+			Green_LED_On();
+			Red_LED_Off();
 			TIM2->CCR2 = next_duty_cycle;
+		}
 
 		// we want to wait 200ms per position - that means we get abs value of our pos delta
 		// we would then div by 4 to get our 'grades' of positions, and then we need to mult by 2
@@ -129,7 +139,11 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 		set_wait_bank(servo_no, abs(next_duty_cycle - curr_duty_cycle) / 2);
 	}
 	else
+	{
+		Red_LED_On();
+		Green_LED_Off();
 		USART_Write(USART2, (uint8_t *)pos_prompt, strlen(pos_prompt));
+	}
 	
 	return status;
 
@@ -197,7 +211,11 @@ void parse_recipe(int recipe[], int array_size)
 					curr_duty_cycle = get_curr_duty_cycle(inner_itr);
 					// make sure we didn't violate the bounds -- method will return 0 if so
 					if (!move_servo(inner_itr, opcode_argument, curr_duty_cycle))
+					{
+						Red_LED_On();
+						Green_LED_Off();
 						USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
+					}
 					else
 						set_servo_cursor(inner_itr, ++servo_cursor);
 				}
@@ -305,6 +323,7 @@ void manage_scheduling()
 {
 	int num_clock_cycles = 0;
 	int servo_pos;
+	int cur_duty_cycle;
 	int x;
 	int y;
 
@@ -353,39 +372,81 @@ void manage_scheduling()
 					set_pause_state(y, 0);
 				}
 				else if (u_cmd[y] == 'r' || u_cmd[y] == 'R')
+				{
 				  if(y == 0)
 					{
-						servo_pos = get_servo_pos(y);
-						if(servo_pos != 4)
-							TIM2->CCR1 = (servo_pos - 4);
-						else if(servo_pos == 4)
+						cur_duty_cycle = get_duty_cycle(y);
+						servo_pos = (cur_duty_cycle - 4)/4;
+						if(servo_pos >= 0 && servo_pos <= 5)
+							move_servo(y, servo_pos, cur_duty_cycle);
+						else if(servo_pos < 4)
+						{
+							Red_LED_On();
+							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
-					}
+						}
+						else if(servo_pos > 24)
+						{
+							Red_LED_On();
+							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
+						}
+					}				
 					if(y == 1)
 					{
-						servo_pos = get_servo_pos(y);
-						if(servo_pos != 4)
-							TIM2->CCR2 = (servo_pos - 4);
-						if(servo_pos == 4)
+						cur_duty_cycle = get_duty_cycle(y);
+						servo_pos = (cur_duty_cycle - 4)/4;
+						if(servo_pos >= 0 && servo_pos <= 5)
+							move_servo(y, servo_pos, cur_duty_cycle);
+						else if(servo_pos < 4)
+						{
+							Red_LED_On();
+							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
+						}
+						else if(servo_pos > 24)
+						{
+							Red_LED_On();
+							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
+						}
 					}
+				}
 				else if(u_cmd[y] == 'l' || u_cmd[y] == 'L')
+				{
 					if(y == 0)
 					{
-						servo_pos = get_servo_pos(y);
-						if(servo_pos != 24)
-							TIM2->CCR1 = (servo_pos + 4);
-						else if(servo_pos == 24)
+						cur_duty_cycle = get_duty_cycle(y);
+						servo_pos = (cur_duty_cycle - 4)/4;
+						if(servo_pos >= 0 && servo_pos <= 5)
+							move_servo(y, servo_pos, cur_duty_cycle);
+						else if(servo_pos > 24)
+						{
+							Red_LED_On();
+							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
+						}
+						else if(servo_pos < 4)
+						{
+							Red_LED_On();
+							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
+						}
 					}
 				  if(y == 1)
 					{
-						servo_pos = get_servo_pos(y);
-						if(servo_pos != 24)
-							TIM2->CCR2 = (servo_pos + 4);
-						else if(servo_pos == 24)
+						cur_duty_cycle = get_duty_cycle(y);
+						servo_pos = (cur_duty_cycle - 4)/4;
+						if(servo_pos >= 0 && servo_pos <= 5)
+							move_servo(y, servo_pos, cur_duty_cycle);
+						else if(servo_pos > 24)
+						{
+							Red_LED_On();
+							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
+						}
 					}
+				}
 				else if (u_cmd[y] == 'n' || u_cmd[y] == 'N')
 					continue;
 				else if (u_cmd[y] == 'b' || u_cmd[y] == 'B')
@@ -532,13 +593,14 @@ int is_servo_ready(int servo_no)
 
 	return is_ready;
 }
-int get_servo_pos(int servo_no)
+int get_duty_cycle(int servo_no)
 {
 	int cur_duty_cycle;
+	int pos;
 	if (servo_no == 0)
 			cur_duty_cycle = (TIM2->CCR1 & 0xF);
 		else if (servo_no == 1)
-			cur_duty_cycle = (TIM2->CCR2 & 0xF);
+			cur_duty_cycle = (TIM2->CCR2 & 0xF);	
 	return cur_duty_cycle;
 }
 void config_port_a()
@@ -609,4 +671,6 @@ void config_timer()
 	
 	// make sure the timer is stopped
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
+
 }
+

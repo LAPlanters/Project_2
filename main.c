@@ -37,6 +37,9 @@ char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
 char restart_recipe1[] = "Restarting recipe 1";
 char restart_recipe2[] = "Restarting recipe 2";
+char pos_r_prompt[] = "Error: The servo is at the extreme right position. Can not move servo any further to the right!";
+char pos_l_prompt[] = "Error: The servo is at the extreme left position. Can not move servo any further to the left!";
+char pos_prompt[] = "Error: You have entered an incorrect servo postion. Valid positions are betwwen 0 and 5!";
 char good_bye[] = "Goodbye";
 
 int recipe1[] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
@@ -48,10 +51,8 @@ int recipe3[] = {LOOP_START+3, MOV+0, MOV+1, MOV+2, MOV+3, MOV+4, MOV+5, MOV+4, 
 unsigned char u_cmd[3];
 int servo0_cursor;
 int servo1_cursor;
-
 int servo0_wait_bank;
 int servo1_wait_bank;
-
 int servo0_loop_state;
 int servo0_num_loop_steps;
 int servo1_loop_state;
@@ -60,7 +61,7 @@ int servo0_pause_state;
 int servo1_pause_state;
 int servo0_sprinkler_steps;
 int servo1_sprinkler_steps;
-
+	
 // function prototypes
 void config_port_a(void);
 void config_timer(void);
@@ -81,6 +82,7 @@ int find_end_loop(int recipe[], int curr_index, int array_size);
 void set_pause_state(int servo_no, int state);
 int get_curr_duty_cycle(int servo_no);
 void reset_wait_bank(int servo_no);
+int get_servo_pos(int servo_no);
 void do_the_sprinkler(int servo_no, int loops);
 void set_exec_sprinkler_steps(int servo_no, int steps);
 int get_exec_sprinkler_steps(int servo_no);
@@ -88,6 +90,7 @@ int get_exec_sprinkler_steps(int servo_no);
 int main(void)
 {
 	const int len = sizeof(recipe2)/sizeof(recipe2[0]);
+	int get_servo_pos(int servo_no);
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
 	LED_Init();
@@ -214,15 +217,11 @@ void parse_recipe(int recipe[], int array_size)
 	int opcode_argument = 0;
 	int op_mask = 0xE0;
 	int op_arg_mask = 0x1F;
-
 	int inner_itr = 0;
 	int servo_cursor = 0;
-
 	int loop_state = 0;
 	int num_loop_steps = 0;
-	
 	int executed_sprinkler_steps = 0;
-	
 	int curr_duty_cycle = 0;
 
 	while (servo0_cursor != -1 || servo1_cursor != -1)
@@ -359,6 +358,7 @@ void manage_scheduling()
 {
 	// we initialize to 5 so that we always wait at least 1/10 of a second whenever this is called
 	int num_clock_cycles = 5;
+	int servo_pos;
 	int x;
 	int y;
 
@@ -396,12 +396,46 @@ void manage_scheduling()
 				{
 					set_pause_state(y, 0);
 				}
-				/*else if (u_cmd[y] == 'r' || u_cmd[y] == 'R')
-					continue;
+				else if (u_cmd[y] == 'r' || u_cmd[y] == 'R')
+				{
+					if(y == 0)
+					{
+						servo_pos = get_servo_pos(y);
+						if(servo_pos != 4)
+							TIM2->CCR1 = (servo_pos - 4);
+						else if(servo_pos == 4)
+							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
+					}
+					if(y == 1)
+					{
+						servo_pos = get_servo_pos(y);
+						if(servo_pos != 4)
+							TIM2->CCR2 = (servo_pos - 4);
+						if(servo_pos == 4)
+							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
+					}
+				}
 				else if (u_cmd[y] == 'l' || u_cmd[y] == 'L')
-					continue;
+				{
+					if(y == 0)
+					{
+						servo_pos = get_servo_pos(y);
+						if(servo_pos != 24)
+							TIM2->CCR1 = (servo_pos + 4);
+						else if(servo_pos == 24)
+							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
+					}
+				  if(y == 1)
+					{
+						servo_pos = get_servo_pos(y);
+						if(servo_pos != 24)
+							TIM2->CCR2 = (servo_pos + 4);
+						else if(servo_pos == 24)
+							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
+					}
+				}
 				else if (u_cmd[y] == 'n' || u_cmd[y] == 'N')
-					continue;*/
+					continue;
 				else if (u_cmd[y] == 'b' || u_cmd[y] == 'B')
 				{
 					set_servo_cursor(y, 0);
@@ -568,6 +602,16 @@ int is_servo_ready(int servo_no)
 	}
 
 	return is_ready;
+}
+
+int get_servo_pos(int servo_no)
+{
+	int cur_duty_cycle;
+	if (servo_no == 0)
+			cur_duty_cycle = (TIM2->CCR1 & 0xF);
+		else if (servo_no == 1)
+			cur_duty_cycle = (TIM2->CCR2 & 0xF);
+	return cur_duty_cycle;
 }
 
 void config_port_a()

@@ -106,6 +106,19 @@ uint8_t USART_Read (USART_TypeDef * USARTx) {
 	// Reading USART_DR automatically clears the RXNE flag 
 }
 
+// This method is used when a blocking read is not possible
+// therefore there could very well be nothing in the terminal
+// and the return value be null
+uint8_t USART_NonBlock_Read(USART_TypeDef * USARTx) {
+	uint8_t input = 0;
+	if ((USARTx->ISR & USART_ISR_RXNE))
+	{
+		input = ((uint8_t)(USARTx->RDR & 0xFF));
+		//USARTx->RDR & 0xFF
+	}
+	return input;
+}
+
 void USART_Write(USART_TypeDef * USARTx, uint8_t *buffer, uint32_t nBytes) {
 	int i;
 	// TXE is cleared by a write to the USART_DR register.

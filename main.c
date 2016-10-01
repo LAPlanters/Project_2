@@ -17,8 +17,14 @@
 #define END_LOOP (160)
 #define RECIPE_END (0)
 
+// custom OpCodes
+#define THE_SPRINKLER (96)
+#define WAVE (192)
+
 // User Override Command Constants
 #define ENTER_USR_COMMAND (13)
+
+#define NUM_SPRINKLER_STEPS (12)
 
 // strings used for messaging with the UART
 uint8_t buffer[BufferSize];
@@ -31,14 +37,15 @@ char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
 char restart_recipe1[] = "Restarting recipe 1";
 char restart_recipe2[] = "Restarting recipe 2";
-
 char pos_r_prompt[] = "Error: The servo is at the extreme right position. Can not move servo any further to the right!";
 char pos_l_prompt[] = "Error: The servo is at the extreme left position. Can not move servo any further to the left!";
 char pos_prompt[] = "Error: You have entered an incorrect servo postion. Valid positions are betwwen 0 and 5!";
 char good_bye[] = "Goodbye";
 
-int recipe1[20] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4, RECIPE_END};
-//int recipe1[5] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0};
+int recipe1[] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
+int recipe2[] = {MOV+0,MOV+2,WAIT+13,WAVE,LOOP_START+2,MOV+1,MOV+4,END_LOOP,THE_SPRINKLER,MOV+2,WAIT+8,MOV+3,MOV+1,MOV+2,MOV+3,LOOP_START+2,THE_SPRINKLER,END_LOOP,WAIT+2,RECIPE_END};
+int recipe3[] = {LOOP_START+3, MOV+0, MOV+1, MOV+2, MOV+3, MOV+4, MOV+5, MOV+4, MOV+3, MOV+2, MOV+1, MOV+0, END_LOOP};
+int recipe4[] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0, WAVE, MOV+3, WAIT+30, END_LOOP};
 
 // array for storing user override commands
 unsigned char u_cmd[3];
@@ -52,6 +59,8 @@ int servo1_loop_state;
 int servo1_num_loop_steps;
 int servo0_pause_state;
 int servo1_pause_state;
+int servo0_sprinkler_steps;
+int servo1_sprinkler_steps;
 	
 // function prototypes
 void config_port_a(void);
@@ -73,13 +82,15 @@ int find_end_loop(int recipe[], int curr_index, int array_size);
 void set_pause_state(int servo_no, int state);
 int get_curr_duty_cycle(int servo_no);
 void reset_wait_bank(int servo_no);
-int get_duty_cycle(int servo_no);
+int get_servo_pos(int servo_no);
+void do_the_sprinkler(int servo_no, int loops);
+void set_exec_sprinkler_steps(int servo_no, int steps);
+int get_exec_sprinkler_steps(int servo_no);
 
 int main(void)
 {
-	char rxByte = 'y';
-	int	pass = 0;
-	const int len = sizeof(recipe1)/sizeof(recipe1[0]);
+	const int len = sizeof(recipe2)/sizeof(recipe2[0]);
+	int get_servo_pos(int servo_no);
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
 	LED_Init();
@@ -98,7 +109,7 @@ int main(void)
 	manage_scheduling();
 
 	USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));
-	parse_recipe(recipe1, len);
+	parse_recipe(recipe2, len);
 
 	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 	TIM2->CR1 &= ~(TIM_CR1_CEN);
@@ -146,24 +157,62 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 	}
 	
 	return status;
-
-	// we want to wait 200ms per position - that means we get abs value of our pos delta
-	// we would then div by 4 to get our 'grades' of positions, and then we need to mult by 2
-	// in order to use our process_wait position which takes in an arg that is our mult of tenth of second
-	//process_wait(abs(next_duty_cycle - curr_duty_cycle) / 2);
-	
-	//return next_duty_cycle;
-
 }
 
-// will process a wait by at least 1/10 of a second.
+void do_the_sprinkler(int servo_no, int num_executions)
+{
+	// cannot directly call back to parse_recipe from here so we simulate the follwing
+	// {MOV+5, WAIT+10, MOV+4, MOV+5, MOV+3, MOV+4, MOV+2, MOV+3, MOV+1, MOV+2, MOV+0};
+	int curr_duty_cycle = get_curr_duty_cycle(servo_no);
+	
+	switch(num_executions)
+	{
+		case 0:
+			move_servo(servo_no, 5, curr_duty_cycle);
+		case 1:
+			set_wait_bank(servo_no, 3);
+			break;
+		case 2:
+			move_servo(servo_no, 4, curr_duty_cycle);
+			break;
+		case 3:
+			move_servo(servo_no, 5, curr_duty_cycle);
+			break;
+		case 4:
+			move_servo(servo_no, 3, curr_duty_cycle);
+			break;
+		case 5:
+			move_servo(servo_no, 4, curr_duty_cycle);
+			break;
+		case 6:
+			move_servo(servo_no, 2, curr_duty_cycle);
+			break;
+		case 7:
+			move_servo(servo_no, 3, curr_duty_cycle);
+			break;
+		case 8:
+			move_servo(servo_no, 1, curr_duty_cycle);
+			break;
+		case 9:
+			move_servo(servo_no, 2, curr_duty_cycle);
+			break;
+		case 10:
+			move_servo(servo_no, 0, curr_duty_cycle);
+			break;
+		case 11:
+			move_servo(servo_no, 5, curr_duty_cycle);
+			break;
+		default:
+			set_wait_bank(servo_no, 10);
+	}
+}
+
 void set_wait_bank(int servo_no, int wait_factor)
 {
 	// since we are using 20ms periods, we need to wait for counter to reset 5 X wait_factor
 	int num_clock_cycles;
-	int x;
 
-	num_clock_cycles = 5 + (5 * wait_factor);
+	num_clock_cycles = (5 * wait_factor);
 	if (servo_no == 0)
 		servo0_wait_bank += num_clock_cycles;
 	else if (servo_no == 1)
@@ -184,24 +233,23 @@ void parse_recipe(int recipe[], int array_size)
 	int opcode_argument = 0;
 	int op_mask = 0xE0;
 	int op_arg_mask = 0x1F;
-	int command_result = 0;
 	int inner_itr = 0;
 	int servo_cursor = 0;
 	int loop_state = 0;
-	int num_loop_steps = 0;	
-	int curr_duty_cycle = 0;
+	int num_loop_steps = 0;
+	int executed_sprinkler_steps = 0;
+	int curr_duty_cycle = 0;	
 
 	while (servo0_cursor != -1 || servo1_cursor != -1)
 	{
 		// we send the iterator of this loop to methods that execute commands so that we don't concern ourselves
 		// with hardware specific stuff here
-		for (inner_itr = 0; inner_itr < NUM_SERVO; inner_itr++)	
+		for (inner_itr = 0; inner_itr < NUM_SERVO; inner_itr++)
 		{
+			servo_cursor = get_servo_cursor(inner_itr);
 			// make sure we can even read the next command
-			if (is_servo_ready(inner_itr))
+			if (is_servo_ready(inner_itr) && servo_cursor < array_size)
 			{
-				servo_cursor = get_servo_cursor(inner_itr);
-
 				// mask the element to get the opcode - the top 3 bits
 				opcode = recipe[servo_cursor] & op_mask;
 				opcode_argument = recipe[servo_cursor] & op_arg_mask;
@@ -224,6 +272,20 @@ void parse_recipe(int recipe[], int array_size)
 					set_wait_bank(inner_itr, opcode_argument);
 					set_servo_cursor(inner_itr, ++servo_cursor);
 				}
+				else if (opcode == THE_SPRINKLER)
+				{
+					// since the sprinkler is really a recipe itself, we dont actually advance
+					// from this step in the real recipe until we know we've completed the number
+					// of sprinkler steps
+					executed_sprinkler_steps = get_exec_sprinkler_steps(inner_itr);
+					do_the_sprinkler(inner_itr, executed_sprinkler_steps);
+					set_exec_sprinkler_steps(inner_itr, ++executed_sprinkler_steps);
+					if(executed_sprinkler_steps == NUM_SPRINKLER_STEPS)
+					{
+						set_exec_sprinkler_steps(inner_itr, 0);
+						set_servo_cursor(inner_itr, ++servo_cursor);
+					}
+				}
 				else if (opcode == LOOP_START)
 				{
 					// loop state holds the number of loops left to execute
@@ -237,7 +299,6 @@ void parse_recipe(int recipe[], int array_size)
 					}
 
 					set_servo_cursor(inner_itr, ++servo_cursor);
-					set_wait_bank(inner_itr, 0);
 				}
 				else if (opcode == END_LOOP)
 				{
@@ -251,12 +312,35 @@ void parse_recipe(int recipe[], int array_size)
 						set_num_loop_steps(inner_itr, 0);
 						set_servo_cursor(inner_itr, ++servo_cursor);
 					}
-					set_wait_bank(inner_itr, 0);
 				}
 				else if (opcode == RECIPE_END)
 				{
-					set_wait_bank(inner_itr, 0);
 					set_servo_cursor(inner_itr, -1);
+				}
+				else if (opcode == WAVE)
+				{
+					curr_duty_cycle = get_curr_duty_cycle(0);
+					move_servo(0, 0, curr_duty_cycle);
+					curr_duty_cycle = get_curr_duty_cycle(1);
+					move_servo(1, 0, curr_duty_cycle);
+					
+					curr_duty_cycle = get_curr_duty_cycle(1);
+					move_servo(1, 5, curr_duty_cycle);						
+					curr_duty_cycle = get_curr_duty_cycle(0);
+					move_servo(0, 5, curr_duty_cycle);
+					curr_duty_cycle = get_curr_duty_cycle(0);
+					move_servo(0, 0, curr_duty_cycle);
+					curr_duty_cycle = get_curr_duty_cycle(1);
+					move_servo(1, 0, curr_duty_cycle);
+					
+					curr_duty_cycle = get_curr_duty_cycle(1);
+					move_servo(1, 5, curr_duty_cycle);						
+					curr_duty_cycle = get_curr_duty_cycle(0);
+					move_servo(0, 5, curr_duty_cycle);
+					curr_duty_cycle = get_curr_duty_cycle(0);
+					move_servo(0, 0, curr_duty_cycle);
+					curr_duty_cycle = get_curr_duty_cycle(1);
+					move_servo(1, 0, curr_duty_cycle);					
 				}
 			}
 		}
@@ -280,9 +364,6 @@ void read_user_cmd(void)
 		
 		if (user_in == 'x' || user_in == 'X')
 		{
-			/*u_cmd[0] = '\0';
-			u_cmd[1] = '\0';
-			u_cmd[2] = '\0';*/
 			memset(&u_cmd[0], 0, sizeof(u_cmd));
 			USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));
 		}
@@ -304,7 +385,6 @@ void read_user_cmd(void)
 		}
 
 		if (index < 2) 
-		
 		{
 			while (x < len_whitelist)
 			{
@@ -321,33 +401,24 @@ void read_user_cmd(void)
 
 void manage_scheduling()
 {
-	int num_clock_cycles = 0;
-	int servo_pos;
+	// we initialize to 5 so that we always wait at least 1/10 of a second whenever this is called
+	int num_clock_cycles = 5;
+	uint8_t servo_pos;
 	int cur_duty_cycle;
 	int x;
 	int y;
 
 	// we want to take the smallest value of the two UNLESS
 	// the smallest value happens to be in a paused state
-	if(servo0_wait_bank < servo1_wait_bank)
-	{
-		if (servo0_pause_state != 1)
-			num_clock_cycles = servo0_wait_bank;
-		else
-			num_clock_cycles = servo1_wait_bank;
-	}
-	else if(servo0_wait_bank > servo1_wait_bank)
-	{
-		if(servo1_pause_state != 1)
-			num_clock_cycles = servo1_wait_bank;
-		else
-			num_clock_cycles = servo0_wait_bank;
-	}
-	else if(servo0_wait_bank == servo1_wait_bank)
-	{
-		num_clock_cycles = servo0_wait_bank;
-	}
-
+	if(servo0_pause_state == 1)
+		num_clock_cycles += servo1_wait_bank;
+	else if(servo1_pause_state == 1)
+		num_clock_cycles += servo0_wait_bank;
+	else if(servo0_wait_bank < servo1_wait_bank)
+		num_clock_cycles += servo0_wait_bank;
+	else if(servo1_wait_bank <= servo0_wait_bank)
+		num_clock_cycles += servo1_wait_bank;
+	
 	for(x = 0; x < num_clock_cycles; x++)
 	{
 		while(TIM2->CNT == 0){}
@@ -373,78 +444,77 @@ void manage_scheduling()
 				}
 				else if (u_cmd[y] == 'r' || u_cmd[y] == 'R')
 				{
-				  if(y == 0)
+					if( y == 0 && servo0_pause_state == 1)
 					{
-						cur_duty_cycle = get_duty_cycle(y);
-						servo_pos = (cur_duty_cycle - 4)/4;
-						if(servo_pos >= 0 && servo_pos <= 5)
+						cur_duty_cycle = get_servo_pos(y);
+						servo_pos = ((cur_duty_cycle - 4)/4)-1;
+						if(servo_pos <= 5)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos < 4)
+						else if(servo_pos > 5)
 						{
 							Red_LED_On();
 							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
-						}
-						else if(servo_pos > 24)
-						{
-							Red_LED_On();
-							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
-						}
-					}				
-					if(y == 1)
-					{
-						cur_duty_cycle = get_duty_cycle(y);
-						servo_pos = (cur_duty_cycle - 4)/4;
-						if(servo_pos >= 0 && servo_pos <= 5)
-							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos < 4)
-						{
-							Red_LED_On();
-							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
-						}
-						else if(servo_pos > 24)
-						{
-							Red_LED_On();
-							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
 						}
 					}
-				}
-				else if(u_cmd[y] == 'l' || u_cmd[y] == 'L')
+					if( y == 1 && servo1_pause_state == 1)
+					{
+						cur_duty_cycle = get_servo_pos(y);
+						servo_pos = ((cur_duty_cycle - 4)/4)-1;
+						if(servo_pos <= 5)
+							move_servo(y, servo_pos, cur_duty_cycle);
+						else if(servo_pos > 5)
+						{
+							Red_LED_On();
+							Green_LED_Off();
+						}
+					}
+				}				
+					
+				else if (u_cmd[y] == 'l' || u_cmd[y] == 'L')
 				{
-					if(y == 0)
+					if( y == 0 && servo0_pause_state == 1)
 					{
-						cur_duty_cycle = get_duty_cycle(y);
-						servo_pos = (cur_duty_cycle - 4)/4;
-						if(servo_pos >= 0 && servo_pos <= 5)
+						cur_duty_cycle = get_servo_pos(y);
+						servo_pos = ((cur_duty_cycle - 4)/4)+1;
+						if(servo_pos <= 5)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 24)
+						else if(servo_pos > 5)
 						{
 							Red_LED_On();
 							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_l_prompt, strlen(pos_l_prompt));
 						}
-						else if(servo_pos < 4)
-						{
-							Red_LED_On();
-							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
-						}
+					if(servo0_pause_state != 1)
+					{
+						Red_LED_On();
+						Green_LED_Off();
 					}
-				  if(y == 1)
+					if(servo1_pause_state != 1)
 					{
-						cur_duty_cycle = get_duty_cycle(y);
-						servo_pos = (cur_duty_cycle - 4)/4;
-						if(servo_pos >= 0 && servo_pos <= 5)
+						Red_LED_On();
+						Green_LED_Off();
+					}						
+					}
+					if( y == 1 && servo1_pause_state == 1)
+					{
+						cur_duty_cycle = get_servo_pos(y);
+						servo_pos = ((cur_duty_cycle - 4)/4)+1;
+						if(servo_pos <= 5)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 24)
+						else if(servo_pos > 5)
 						{
 							Red_LED_On();
 							Green_LED_Off();
-							USART_Write(USART2, (uint8_t *)pos_r_prompt, strlen(pos_r_prompt));
-						}
+						}	
+					}
+					if(servo0_pause_state != 1)
+					{
+						Red_LED_On();
+						Green_LED_Off();
+					}
+					if(servo1_pause_state != 1)
+					{
+						Red_LED_On();
+						Green_LED_Off();
 					}
 				}
 				else if (u_cmd[y] == 'n' || u_cmd[y] == 'N')
@@ -453,11 +523,14 @@ void manage_scheduling()
 				{
 					set_servo_cursor(y, 0);
 					reset_wait_bank(y);
+					set_pause_state(y, 0);
+					set_loop_state(y, 0);
+					set_exec_sprinkler_steps(y, 0);
 				}
 			}
 			memset(&u_cmd[0], 0, sizeof(u_cmd));
 			USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));
-			return;
+			break;
 		}
 	}
 }
@@ -484,6 +557,7 @@ void initiate_startup_sequence(int servo_num)
 
 }
 
+// GETTERS AND SETTERS
 int get_servo_cursor(int servo_no)
 {
 	int servo_cursor = 0;
@@ -561,6 +635,25 @@ int get_curr_duty_cycle(int servo_no)
 	return duty_cycle;
 }
 
+void set_exec_sprinkler_steps(int servo_no, int steps)
+{
+	if(servo_no == 0)
+		servo0_sprinkler_steps = steps;
+	else if(servo_no == 1)
+		servo1_sprinkler_steps = steps;
+}
+
+int get_exec_sprinkler_steps(int servo_no)
+{
+	int steps = 0;
+	if(servo_no == 0)
+		steps = servo0_sprinkler_steps;
+	else if(servo_no == 1)
+		steps = servo1_sprinkler_steps;
+	
+	return steps;
+}
+
 int find_end_loop(int recipe[], int start_index, int len)
 {
 	int op_mask = 0xE0;
@@ -593,16 +686,18 @@ int is_servo_ready(int servo_no)
 
 	return is_ready;
 }
-int get_duty_cycle(int servo_no)
+
+int get_servo_pos(int servo_no)
 {
 	int cur_duty_cycle;
-	int pos;
+	//int pos;
 	if (servo_no == 0)
-			cur_duty_cycle = (TIM2->CCR1 & 0xF);
+			cur_duty_cycle = (TIM2->CCR1 & 0xFF);
 		else if (servo_no == 1)
-			cur_duty_cycle = (TIM2->CCR2 & 0xF);	
+			cur_duty_cycle = (TIM2->CCR2 & 0xFF);	
 	return cur_duty_cycle;
 }
+
 void config_port_a()
 {
 	// IO port A clock enable

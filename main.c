@@ -31,21 +31,18 @@ uint8_t buffer[BufferSize];
 uint8_t allowed_user_input[] = {'p', 'P', 'c', 'C', 'r', 'R', 'l', 'L', 'n', 'N', 'b', 'B', 'x', 'X'};
 char out_range[] = "Error. you have entered a parameter out of the bounds of the Mnemonic command\r\n";
 char prompt[] = "\r\n>";
-char pause_first1[] = "Error: either Servo 1 needs to be paused before moving, or servo 1 is to the extreme position. Trouble shoot and try again.\r\n";
-char pause_first2[] = "Error: either Servo 2 needs to be paused before moving, or servo 2 is to the extreme position. Trouble shoot and try again.\r\n";
 char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
 char restart_recipe1[] = "Restarting recipe 1";
 char restart_recipe2[] = "Restarting recipe 2";
-char pos_r_prompt[] = "Error: The servo is at the extreme right position. Can not move servo any further to the right!";
-char pos_l_prompt[] = "Error: The servo is at the extreme left position. Can not move servo any further to the left!";
-char pos_prompt[] = "Error: You have entered an incorrect servo postion. Valid positions are betwwen 0 and 5!";
+char error_prompt[] = "Error: You have entered an error state. Reset Required";
+char pause_prompt[] = "Error: Please pause the servo before attempting to mannually move.";
 char good_bye[] = "Goodbye";
 
 int recipe1[] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
 int recipe2[] = {MOV+0,MOV+2,WAIT+13,WAVE,LOOP_START+2,MOV+1,MOV+4,END_LOOP,THE_SPRINKLER,MOV+2,WAIT+8,MOV+3,MOV+1,MOV+2,MOV+3,LOOP_START+2,THE_SPRINKLER,END_LOOP,WAIT+2,RECIPE_END};
 int recipe3[] = {LOOP_START+3, MOV+0, MOV+1, MOV+2, MOV+3, MOV+4, MOV+5, MOV+4, MOV+3, MOV+2, MOV+1, MOV+0, END_LOOP};
-int recipe4[] = {MOV+0, WAIT+29, MOV+5, WAIT+29, MOV+0, WAVE, MOV+3, WAIT+30, END_LOOP};
+int recipe4[] = {WAVE, WAVE, WAVE, WAVE, WAVE, WAVE, MOV+3, WAIT+30, RECIPE_END};
 
 // array for storing user override commands
 unsigned char u_cmd[3];
@@ -256,6 +253,8 @@ void parse_recipe(int recipe[], int array_size)
 						Red_LED_On();
 						Green_LED_Off();
 						USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
+						USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
+						while(1);
 					}
 					else
 						set_servo_cursor(inner_itr, ++servo_cursor);
@@ -456,8 +455,17 @@ void manage_scheduling()
 						{
 							Red_LED_On();
 							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
+							while(1);
 						}
 					}
+					else if(servo0_pause_state != 1)
+					{
+						Red_LED_On();
+						Green_LED_Off();
+						USART_Write(USART2, (uint8_t *)pause_prompt, strlen(pause_prompt));
+					}				
+					
 					if( y == 1 && servo1_pause_state == 1)
 					{
 						cur_duty_cycle = get_curr_duty_cycle(y);
@@ -468,8 +476,17 @@ void manage_scheduling()
 						{
 							Red_LED_On();
 							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
+							while(1);
 						}
 					}
+					
+					else if(servo1_pause_state != 1)
+					{
+						Red_LED_On();
+						Green_LED_Off();
+						USART_Write(USART2, (uint8_t *)pause_prompt, strlen(pause_prompt));
+					}					
 				}				
 					
 				else if (u_cmd[y] == 'l' || u_cmd[y] == 'L')
@@ -484,13 +501,18 @@ void manage_scheduling()
 						{
 							Red_LED_On();
 							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
+							while(1);
 						}
+					}
+					
 					else if(servo0_pause_state != 1)
 					{
 						Red_LED_On();
 						Green_LED_Off();
+						USART_Write(USART2, (uint8_t *)pause_prompt, strlen(pause_prompt));
 					}									
-					}
+					
 					if( y == 1 && servo1_pause_state == 1)
 					{
 						cur_duty_cycle = get_curr_duty_cycle(y);
@@ -501,12 +523,15 @@ void manage_scheduling()
 						{
 							Red_LED_On();
 							Green_LED_Off();
+							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
+							while(1);
 						}	
 					}					
 					else if(servo1_pause_state != 1)
 					{
 						Red_LED_On();
 						Green_LED_Off();
+						USART_Write(USART2, (uint8_t *)pause_prompt, strlen(pause_prompt));
 					}
 				}
 				else if (u_cmd[y] == 'n' || u_cmd[y] == 'N')

@@ -148,14 +148,7 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 		// we would then div by 4 to get our 'grades' of positions, and then we need to mult by 2
 		// in order to use our process_wait position which takes in an arg that is our mult of tenth of second
 		set_wait_bank(servo_no, abs(next_duty_cycle - curr_duty_cycle) / 2);
-	}
-	else
-	{
-		Red_LED_On();
-		Green_LED_Off();
-		USART_Write(USART2, (uint8_t *)pos_prompt, strlen(pos_prompt));
-	}
-	
+	}	
 	return status;
 }
 
@@ -321,24 +314,33 @@ void parse_recipe(int recipe[], int array_size)
 				{
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);
+					manage_scheduling();
 					
 					curr_duty_cycle = get_curr_duty_cycle(1);
-					move_servo(1, 5, curr_duty_cycle);						
+					move_servo(1, 5, curr_duty_cycle);	
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 5, curr_duty_cycle);
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);
+					manage_scheduling();
 					
 					curr_duty_cycle = get_curr_duty_cycle(1);
-					move_servo(1, 5, curr_duty_cycle);						
+					move_servo(1, 5, curr_duty_cycle);
+					manage_scheduling();					
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 5, curr_duty_cycle);
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
+					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);					
 				}
@@ -446,11 +448,11 @@ void manage_scheduling()
 				{
 					if( y == 0 && servo0_pause_state == 1)
 					{
-						cur_duty_cycle = get_servo_pos(y);
+						cur_duty_cycle = get_curr_duty_cycle(y);
 						servo_pos = ((cur_duty_cycle - 4)/4)-1;
-						if(servo_pos <= 5)
+						if(servo_pos > 0)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 5)
+						else if(servo_pos == 0)
 						{
 							Red_LED_On();
 							Green_LED_Off();
@@ -458,11 +460,11 @@ void manage_scheduling()
 					}
 					if( y == 1 && servo1_pause_state == 1)
 					{
-						cur_duty_cycle = get_servo_pos(y);
+						cur_duty_cycle = get_curr_duty_cycle(y);
 						servo_pos = ((cur_duty_cycle - 4)/4)-1;
-						if(servo_pos <= 5)
+						if(servo_pos > 0)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 5)
+						else if(servo_pos == 0)
 						{
 							Red_LED_On();
 							Green_LED_Off();
@@ -474,44 +476,34 @@ void manage_scheduling()
 				{
 					if( y == 0 && servo0_pause_state == 1)
 					{
-						cur_duty_cycle = get_servo_pos(y);
+						cur_duty_cycle = get_curr_duty_cycle(y);
 						servo_pos = ((cur_duty_cycle - 4)/4)+1;
-						if(servo_pos <= 5)
+						if(servo_pos < 5)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 5)
+						else if(servo_pos >= 5)
 						{
 							Red_LED_On();
 							Green_LED_Off();
 						}
-					if(servo0_pause_state != 1)
+					else if(servo0_pause_state != 1)
 					{
 						Red_LED_On();
 						Green_LED_Off();
-					}
-					if(servo1_pause_state != 1)
-					{
-						Red_LED_On();
-						Green_LED_Off();
-					}						
+					}									
 					}
 					if( y == 1 && servo1_pause_state == 1)
 					{
-						cur_duty_cycle = get_servo_pos(y);
+						cur_duty_cycle = get_curr_duty_cycle(y);
 						servo_pos = ((cur_duty_cycle - 4)/4)+1;
-						if(servo_pos <= 5)
+						if(servo_pos < 5)
 							move_servo(y, servo_pos, cur_duty_cycle);
-						else if(servo_pos > 5)
+						else if(servo_pos >= 5)
 						{
 							Red_LED_On();
 							Green_LED_Off();
 						}	
-					}
-					if(servo0_pause_state != 1)
-					{
-						Red_LED_On();
-						Green_LED_Off();
-					}
-					if(servo1_pause_state != 1)
+					}					
+					else if(servo1_pause_state != 1)
 					{
 						Red_LED_On();
 						Green_LED_Off();
@@ -687,7 +679,7 @@ int is_servo_ready(int servo_no)
 	return is_ready;
 }
 
-int get_servo_pos(int servo_no)
+/*int get_servo_pos(int servo_no)
 {
 	int cur_duty_cycle;
 	//int pos;
@@ -696,7 +688,7 @@ int get_servo_pos(int servo_no)
 		else if (servo_no == 1)
 			cur_duty_cycle = (TIM2->CCR2 & 0xFF);	
 	return cur_duty_cycle;
-}
+}*/
 
 void config_port_a()
 {

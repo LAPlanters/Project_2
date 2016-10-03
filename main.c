@@ -40,7 +40,7 @@ char pause_prompt[] = "Error: Please pause the servo before attempting to mannua
 char good_bye[] = "Goodbye";
 
 int recipe1[] = {MOV+0,MOV+5,MOV+0,MOV+3,LOOP_START+0,MOV+1,MOV+4,END_LOOP,MOV+0,MOV+2,WAIT+0,MOV+3,WAIT+0,MOV+2,MOV+3,WAIT+31,WAIT+31,WAIT+31,MOV+4};
-int recipe2[] = {MOV+0,MOV+2,WAIT+13,WAVE,LOOP_START+2,MOV+1,MOV+4,END_LOOP,THE_SPRINKLER,MOV+2,WAIT+8,MOV+3,MOV+1,MOV+2,MOV+3,LOOP_START+2,THE_SPRINKLER,END_LOOP,WAIT+2,RECIPE_END};
+int recipe2[] = {MOV+0,MOV+2,WAIT+13,LOOP_START+2,MOV+1,MOV+4,END_LOOP,THE_SPRINKLER,MOV+2,WAIT+8,MOV+3,MOV+1,MOV+2,MOV+3,LOOP_START+2,THE_SPRINKLER,END_LOOP,WAIT+2,RECIPE_END};
 int recipe3[] = {LOOP_START+3, MOV+0, MOV+1, MOV+2, MOV+3, MOV+4, MOV+5, MOV+4, MOV+3, MOV+2, MOV+1, MOV+0, END_LOOP};
 int recipe4[] = {WAVE, WAVE, WAVE, WAVE, WAVE, WAVE, MOV+3, WAIT+30, RECIPE_END};
 
@@ -87,7 +87,7 @@ int get_exec_sprinkler_steps(int servo_no);
 
 int main(void)
 {
-	const int len = sizeof(recipe2)/sizeof(recipe2[0]);
+	const int len = sizeof(recipe4)/sizeof(recipe4[0]);
 	int get_servo_pos(int servo_no);
 	
 	System_Clock_Init(); // Switch System Clock = 80 MHz
@@ -107,7 +107,7 @@ int main(void)
 	manage_scheduling();
 
 	USART_Write(USART2, (uint8_t *)prompt, strlen(prompt));
-	parse_recipe(recipe2, len);
+	parse_recipe(recipe4, len);
 
 	USART_Write(USART2, (uint8_t *)good_bye, strlen(good_bye));
 	TIM2->CR1 &= ~(TIM_CR1_CEN);

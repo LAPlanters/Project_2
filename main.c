@@ -258,8 +258,10 @@ void parse_recipe(int recipe[], int array_size)
 						enable_continue = false;
 					}
 					else
+					{
 						set_servo_cursor(inner_itr, ++servo_cursor);
 						Green_LED_Toggle();
+					}
 				}
 				else if (opcode == WAIT)
 				{
@@ -319,35 +321,33 @@ void parse_recipe(int recipe[], int array_size)
 				{
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
-					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);
 					manage_scheduling();
 					
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 5, curr_duty_cycle);	
-					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 5, curr_duty_cycle);
 					manage_scheduling();
+
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
-					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);
 					manage_scheduling();
 					
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 5, curr_duty_cycle);
-					manage_scheduling();					
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 5, curr_duty_cycle);
 					manage_scheduling();
+
 					curr_duty_cycle = get_curr_duty_cycle(0);
 					move_servo(0, 0, curr_duty_cycle);
-					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
 					move_servo(1, 0, curr_duty_cycle);
+					manage_scheduling();
 					
 					Green_LED_Toggle();					
 				}
@@ -490,7 +490,6 @@ void manage_scheduling()
 							enable_continue = false;
 						}
 					}
-					
 					else if(servo1_pause_state != 1)
 					{
 						Red_LED_On();
@@ -515,7 +514,6 @@ void manage_scheduling()
 							enable_continue = false;
 						}
 					}
-					
 					else if(servo0_pause_state != 1)
 					{
 						Red_LED_On();
@@ -715,17 +713,6 @@ int is_servo_ready(int servo_no)
 
 	return is_ready;
 }
-
-/*int get_servo_pos(int servo_no)
-{
-	int cur_duty_cycle;
-	//int pos;
-	if (servo_no == 0)
-			cur_duty_cycle = (TIM2->CCR1 & 0xFF);
-		else if (servo_no == 1)
-			cur_duty_cycle = (TIM2->CCR2 & 0xFF);	
-	return cur_duty_cycle;
-}*/
 
 void config_port_a()
 {

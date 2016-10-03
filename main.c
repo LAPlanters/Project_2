@@ -293,7 +293,17 @@ void parse_recipe(int recipe[], int array_size)
 					else
 					{
 						set_loop_state(inner_itr, opcode_argument + 1);
-						set_num_loop_steps(inner_itr, find_end_loop(recipe, servo_cursor, array_size));
+						num_loop_steps = find_end_loop(recipe, servo_cursor, array_size);
+
+						// we have found an inner loop if find_end_loop returns 0
+						if (!num_loop_steps)
+						{
+							Red_LED_On();
+							Green_LED_Off();
+							enable_continue = false;
+						}
+						else
+							set_num_loop_steps(inner_itr, num_loop_steps);
 					}
 
 					set_servo_cursor(inner_itr, ++servo_cursor);
@@ -690,6 +700,8 @@ int find_end_loop(int recipe[], int start_index, int len)
 	{
 		if ((recipe[start_index] & op_mask) == END_LOOP)
 			break;
+		else if (steps > 0 && (recipe[start_index] & op_mask) == LOOP_START)
+			return 0;
 		steps++;
 		start_index++;
 	}
@@ -710,6 +722,9 @@ int is_servo_ready(int servo_no)
 		if(servo1_wait_bank == 0 && servo1_pause_state == 0 && servo1_cursor != -1)
 			is_ready = 1;
 	}
+
+	if (!enable_continue)
+		is_ready = 0;
 
 	return is_ready;
 }

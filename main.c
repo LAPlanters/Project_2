@@ -35,7 +35,7 @@ char no_override1[] = "No over ride command executed on servo 1";
 char no_override2[] = "No over ride command executed on servo 2";
 char restart_recipe1[] = "Restarting recipe 1";
 char restart_recipe2[] = "Restarting recipe 2";
-char error_prompt[] = "Error: You have entered an error state. Reset Required";
+char error_prompt[] = "Error: You have entered an error state. Continue command has been disabled. Recipe will not be able to finish and reset will be required";
 char pause_prompt[] = "Error: Please pause the servo before attempting to mannually move.";
 char good_bye[] = "Goodbye";
 
@@ -58,6 +58,7 @@ int servo0_pause_state;
 int servo1_pause_state;
 int servo0_sprinkler_steps;
 int servo1_sprinkler_steps;
+bool enable_continue = true;
 	
 // function prototypes
 void config_port_a(void);
@@ -130,13 +131,13 @@ int move_servo(int servo_no, int pos, int curr_duty_cycle)
 
 		if (servo_no == 0)
 		{
-			Green_LED_On();
+			Green_LED_Toggle();
 			Red_LED_Off();
 			TIM2->CCR1 = next_duty_cycle;
 		}
 		else if (servo_no == 1)
 		{
-			Green_LED_On();
+			Green_LED_Toggle();
 			Red_LED_Off();
 			TIM2->CCR2 = next_duty_cycle;
 		}
@@ -254,15 +255,17 @@ void parse_recipe(int recipe[], int array_size)
 						Green_LED_Off();
 						USART_Write(USART2, (uint8_t *)out_range, strlen(out_range));
 						USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
-						while(1);
+						enable_continue = false;
 					}
 					else
 						set_servo_cursor(inner_itr, ++servo_cursor);
+						Green_LED_Toggle();
 				}
 				else if (opcode == WAIT)
 				{
 					set_wait_bank(inner_itr, opcode_argument);
 					set_servo_cursor(inner_itr, ++servo_cursor);
+					Green_LED_Toggle();
 				}
 				else if (opcode == THE_SPRINKLER)
 				{
@@ -276,6 +279,7 @@ void parse_recipe(int recipe[], int array_size)
 					{
 						set_exec_sprinkler_steps(inner_itr, 0);
 						set_servo_cursor(inner_itr, ++servo_cursor);
+						Green_LED_Toggle();
 					}
 				}
 				else if (opcode == LOOP_START)
@@ -303,10 +307,12 @@ void parse_recipe(int recipe[], int array_size)
 					{
 						set_num_loop_steps(inner_itr, 0);
 						set_servo_cursor(inner_itr, ++servo_cursor);
+						Green_LED_Toggle();
 					}
 				}
 				else if (opcode == RECIPE_END)
 				{
+					Green_LED_Toggle();
 					set_servo_cursor(inner_itr, -1);
 				}
 				else if (opcode == WAVE)
@@ -341,7 +347,9 @@ void parse_recipe(int recipe[], int array_size)
 					move_servo(0, 0, curr_duty_cycle);
 					manage_scheduling();
 					curr_duty_cycle = get_curr_duty_cycle(1);
-					move_servo(1, 0, curr_duty_cycle);					
+					move_servo(1, 0, curr_duty_cycle);
+					
+					Green_LED_Toggle();					
 				}
 			}
 		}
@@ -438,10 +446,12 @@ void manage_scheduling()
 				if (u_cmd[y] == 'p' || u_cmd[y] == 'P')
 				{
 					set_pause_state(y, 1);
+					Green_LED_Toggle();
 				}
-				else if (u_cmd[y] == 'c' || u_cmd[y] == 'C')
+				else if ((u_cmd[y] == 'c' || u_cmd[y] == 'C') && enable_continue == true )
 				{
 					set_pause_state(y, 0);
+					Green_LED_Toggle();
 				}
 				else if (u_cmd[y] == 'r' || u_cmd[y] == 'R')
 				{
@@ -456,7 +466,7 @@ void manage_scheduling()
 							Red_LED_On();
 							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
-							while(1);
+							enable_continue = false;
 						}
 					}
 					else if(servo0_pause_state != 1)
@@ -477,7 +487,7 @@ void manage_scheduling()
 							Red_LED_On();
 							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
-							while(1);
+							enable_continue = false;
 						}
 					}
 					
@@ -502,7 +512,7 @@ void manage_scheduling()
 							Red_LED_On();
 							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
-							while(1);
+							enable_continue = false;
 						}
 					}
 					
@@ -524,7 +534,7 @@ void manage_scheduling()
 							Red_LED_On();
 							Green_LED_Off();
 							USART_Write(USART2, (uint8_t *)error_prompt, strlen(error_prompt));
-							while(1);
+							enable_continue = false;
 						}	
 					}					
 					else if(servo1_pause_state != 1)
@@ -543,6 +553,8 @@ void manage_scheduling()
 					set_pause_state(y, 0);
 					set_loop_state(y, 0);
 					set_exec_sprinkler_steps(y, 0);
+					enable_continue = true;
+					Green_LED_Toggle();
 				}
 			}
 			memset(&u_cmd[0], 0, sizeof(u_cmd));
